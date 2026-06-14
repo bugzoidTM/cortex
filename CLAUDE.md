@@ -113,3 +113,63 @@ Quando o usuário pedir skill nova:
 4. Se a skill precisar de arquivos de apoio (templates, exemplos),
    criar dentro da pasta da skill
 5. Seguir o fluxo da skill-creator nativa do Claude Code
+
+---
+
+# Nutef — perfil do negócio
+
+> Seção adicionada pelo `/instalar`. Edite à vontade conforme a empresa evolui.
+
+## O que é esse workspace
+
+Operação da **Nutef** (NUTEF — Núcleo de Tecnologias Futuras), empresa de
+tecnologia em IA e marketing, em fase de fundação. Por enquanto é operação
+solo. A estrutura está enxuta e cresce conforme a empresa toma forma.
+
+**Estrutura de pastas:**
+- `_memoria/` — quem é a empresa, como falamos, foco atual
+- `identidade/` — marca aplicada em tudo que o sistema gera (logo, cores, fontes)
+- `marketing/` — campanhas, conteúdo, mídia paga
+- `saidas/` — documentos pontuais
+- `dados/` — arquivos a analisar
+- `scripts/` — automações
+- `templates/` — moldes de perfis, skills e identidade
+
+*(Crie pastas novas — `comercial/`, `projetos/`, etc. — quando surgir a necessidade.)*
+
+## Sobre a empresa
+
+A Nutef é uma empresa de tecnologia atuando em IA e marketing. Ainda não tem
+produto/serviço fechado nem perfil de cliente definido — está em fase de
+descoberta da oferta. Operação solo (apenas o fundador).
+
+Lema: *"Transformamos ideias em realidade digital através de automação
+inteligente, desenvolvimento sob medida e estratégias que conectam tecnologia
+e propósito humano."*
+
+## Foco atual
+
+Gerar e organizar ideias de produtos/serviços viáveis (ver `_memoria/estrategia.md`).
+Ao sugerir prioridades, atacar primeiro o que ajuda a definir e validar a oferta.
+
+## Tom de voz
+
+Formal e polido, técnico mas com lado humano. **Evitar jargão de guru / linguagem
+de coach.** Detalhes em `_memoria/preferencias.md`.
+
+## Regras do sistema
+
+- Conteúdo e visuais respeitam `identidade/design-guide.md` (tema escuro, azul + laranja)
+- Documentos pontuais vão em `saidas/`
+- Materiais de marketing em `marketing/`
+
+## Ferramentas conectadas
+
+- [ ] Notion
+- [ ] Gmail
+- [ ] Google Calendar
+- [ ] Google Ads
+- [ ] Meta Ads
+- [ ] Slack
+
+*(Marcar conforme for instalando os MCPs)*

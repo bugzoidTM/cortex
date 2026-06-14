@@ -6,8 +6,24 @@
 
 ## Fase
 
-## Prioridade principal
+Fundação. A Nutef ainda não tem produto/serviço definido — o foco do momento
+é descobrir e validar o que a empresa vai oferecer.
 
-## O que pode esperar
+## Gargalo atual
+
+Gerar ideias de bons produtos — ofertas viáveis, que façam sentido de mercado
+e que estejam alinhadas com IA + marketing.
+
+## Pra tirar das costas
+
+Organizar ideias. (Candidata a virar skill própria — rodar `/mapear-rotinas`
+quando quiser transformar isso num fluxo automático.)
+
+## Próximas prioridades
+
+- Brainstorm estruturado de ideias de produto/serviço (IA + marketing)
+- Filtrar e priorizar as ideias por viabilidade e encaixe de mercado
+- Definir um perfil de cliente inicial a partir da ideia escolhida
+- Esboçar a primeira oferta concreta
 
 ## Contexto com prazo
