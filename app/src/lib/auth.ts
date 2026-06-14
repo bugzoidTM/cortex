@@ -93,6 +93,23 @@ export async function requireCurrentSession() {
   return session;
 }
 
+export function isSuperuserEmail(email: string) {
+  const configured = process.env.CORTEX_SUPERUSER_EMAILS ?? "admin@nutef.com";
+  return configured
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(email.toLowerCase());
+}
+
+export async function requireSuperuserSession() {
+  const session = await requireCurrentSession();
+  if (!isSuperuserEmail(session.email)) {
+    throw new SuperuserRequiredError();
+  }
+  return session;
+}
+
 export async function destroyCurrentSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -119,5 +136,11 @@ export function setSessionCookie(token: string, expiresAt: Date) {
 export class AuthRequiredError extends Error {
   constructor() {
     super("auth_required");
+  }
+}
+
+export class SuperuserRequiredError extends Error {
+  constructor() {
+    super("superuser_required");
   }
 }

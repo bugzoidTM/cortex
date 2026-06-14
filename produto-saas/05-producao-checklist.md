@@ -90,6 +90,7 @@ Atualizado em: 2026-06-14
 - E-mails transacionais.
 - Checkout/assinatura.
 - Admin Nutef com filtros por tenant, custo, status e skill.
+  - Status: painel inicial publicado em `/admin`, protegido por `CORTEX_SUPERUSER_EMAILS`, com resumo de tenants/usuários/jobs/custo, criação de tenant/usuário, edição de quota mensal, jobs recentes e checklist de produção.
 - Calendário editorial.
 
 ## Próxima sequência recomendada

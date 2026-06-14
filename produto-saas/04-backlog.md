@@ -37,7 +37,7 @@
 - [ ] Docker Compose com web, worker, postgres, redis e proxy.
 - [ ] Script de backup PostgreSQL.
 - [ ] Logs estruturados.
-- [ ] Admin Nutef para visualizar usuários, jobs e consumo.
+- [x] Admin Nutef para visualizar usuários, jobs e consumo.
 
 ## P1 — Importante após beta
 
