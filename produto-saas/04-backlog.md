@@ -61,11 +61,11 @@
 
 ## Primeiras tarefas executáveis
 
-1. Criar projeto Next.js em `app/`.
-2. Montar layout base com identidade Cortex.
-3. Implementar protótipo das telas com dados mockados.
-4. Validar fluxo com build local.
-5. Só depois ligar banco/autenticação.
+1. [x] Criar projeto Next.js em `app/`.
+2. [x] Montar layout base com identidade Cortex.
+3. [x] Implementar protótipo das telas com dados mockados.
+4. [x] Validar fluxo com build local.
+5. [ ] Ligar banco/autenticação após consolidar modelo de dados do MVP.
 
 ## Critério de corte
 

@@ -13,9 +13,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://cortex.nutef.com"),
   title: "Cortex — Núcleo de conteúdo autônomo",
   description:
     "Protótipo SaaS da Nutef para gerar pacotes de conteúdo em português no tom da marca.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "Cortex — Núcleo de conteúdo autônomo",
+    description:
+      "Gere pacotes de conteúdo em português, no tom da marca, com aprovação humana e controle de consumo.",
+    url: "https://cortex.nutef.com/",
+    siteName: "Cortex by Nutef",
+    locale: "pt_BR",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
