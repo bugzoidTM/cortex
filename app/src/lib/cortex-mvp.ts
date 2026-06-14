@@ -35,8 +35,10 @@ export async function ensureDemoTenant() {
   });
 }
 
-export async function getMvpSnapshot() {
-  const tenant = await ensureDemoTenant();
+export async function getMvpSnapshot(tenantId?: string) {
+  const tenant = tenantId
+    ? await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { brandProfile: true } })
+    : await ensureDemoTenant();
   const [jobs, artifacts, usage] = await Promise.all([
     prisma.skillJob.findMany({
       where: { tenantId: tenant.id },
@@ -64,9 +66,11 @@ export async function getMvpSnapshot() {
   };
 }
 
-export async function createContentPackageJob(input: CreateJobInput) {
+export async function createContentPackageJob(input: CreateJobInput, tenantId?: string) {
   const parsed = createJobInputSchema.parse(input);
-  const tenant = await ensureDemoTenant();
+  const tenant = tenantId
+    ? await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { brandProfile: true } })
+    : await ensureDemoTenant();
   const generation = await generateContentPackageArtifact(parsed, tenant.brandProfile);
 
   return prisma.$transaction(async (tx) => {

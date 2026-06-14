@@ -30,14 +30,16 @@ Atualizado em: 2026-06-14
    - Criar job real e confirmar ledger com provider/model reais.
 
 2. Autenticação e sessão
-   - Escolher estratégia inicial: NextAuth/Auth.js, Clerk, Supabase Auth ou auth própria simples.
-   - Proteger rotas de criação/listagem de jobs.
-   - Separar usuário interno Nutef de cliente.
+   - Status: implementado para beta inicial.
+   - Rotas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`.
+   - Sessão: cookie HTTP-only `cortex_session` com hash no banco.
+   - Próximo endurecimento: reset de senha, convite de usuários, rate limit e 2FA opcional.
 
 3. Tenancy real
-   - Remover dependência do tenant demo fixo `nutef-demo`.
-   - Criar tenant por organização/cliente.
-   - Garantir que cada query filtre por `tenantId` derivado da sessão.
+   - Status: implementado para beta inicial em `/api/jobs`.
+   - `User`, `TenantMembership` e `Session` vinculam usuário ao tenant.
+   - Queries de jobs usam `tenantId` derivado da sessão.
+   - Próximo endurecimento: convite de usuários, múltiplos tenants por usuário e seletor de organização.
 
 4. Perfil de marca editável
    - Tela/API para criar e atualizar voz da marca.

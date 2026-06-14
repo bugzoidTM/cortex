@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type Artifact = {
   id: string;
@@ -41,6 +41,12 @@ type JobsPayload = {
   };
 };
 
+type AuthState = {
+  authenticated: boolean;
+  email?: string;
+  tenantId?: string;
+};
+
 const initialForm = {
   title: "Como usar IA para conteúdo local",
   objective: "Gerar pacote semanal de conteúdo para validar o MVP",
@@ -51,11 +57,14 @@ const initialForm = {
 
 export function CortexJobConsole() {
   const [form, setForm] = useState(initialForm);
+  const [login, setLogin] = useState({ email: "", password: "" });
+  const [auth, setAuth] = useState<AuthState>({ authenticated: false });
   const [payload, setPayload] = useState<JobsPayload | null>(null);
-  const [status, setStatus] = useState("Carregando jobs reais...");
+  const [status, setStatus] = useState("Verificando sessão segura...");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  async function loadJobs() {
+  const loadJobs = useCallback(async () => {
     const response = await fetch("/api/jobs", { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`Falha ao carregar jobs: ${response.status}`);
@@ -63,17 +72,69 @@ export function CortexJobConsole() {
     const data = (await response.json()) as JobsPayload;
     setPayload(data);
     setStatus("Dados reais sincronizados com o banco.");
-  }
+  }, []);
+
+  const loadSessionAndJobs = useCallback(async () => {
+    const me = await fetch("/api/auth/me", { cache: "no-store" });
+
+    if (me.status === 401) {
+      setAuth({ authenticated: false });
+      setPayload(null);
+      setStatus("Faça login para acessar jobs reais do seu tenant.");
+      return;
+    }
+
+    if (!me.ok) {
+      throw new Error(`Falha ao verificar sessão: ${me.status}`);
+    }
+
+    const session = await me.json();
+    setAuth({ authenticated: true, email: session.user.email, tenantId: session.tenantId });
+    await loadJobs();
+  }, [loadJobs]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      loadJobs().catch((error) => {
-        setStatus(error instanceof Error ? error.message : "Erro ao carregar jobs.");
+      loadSessionAndJobs().catch((error) => {
+        setStatus(error instanceof Error ? error.message : "Erro ao carregar sessão.");
       });
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [loadSessionAndJobs]);
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoggingIn(true);
+    setStatus("Autenticando sessão segura...");
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(login),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error ?? `Falha no login: ${response.status}`);
+      }
+
+      await loadSessionAndJobs();
+      setStatus("Login concluído. Console conectado ao tenant real.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao fazer login.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setAuth({ authenticated: false });
+    setPayload(null);
+    setStatus("Sessão encerrada.");
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,102 +172,143 @@ export function CortexJobConsole() {
           <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Console MVP real</p>
           <h3 className="mt-3 text-2xl font-black">Criar pacote real</h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#D6D3C4]">
-            Este formulário já chama <code>/api/jobs</code>, grava briefing/job/artifact/ledger no PostgreSQL e atualiza a lista abaixo.
+            Este formulário exige login, chama <code>/api/jobs</code>, grava briefing/job/artifact/ledger no PostgreSQL e atualiza a lista do tenant.
           </p>
+          {auth.authenticated && <p className="mt-2 text-sm text-[#7DC8F5]">Sessão: {auth.email} · tenant {auth.tenantId}</p>}
         </div>
-        <span className="rounded-full bg-[#F5A623]/15 px-4 py-2 text-sm font-semibold text-[#F5A623]">{status}</span>
+        <div className="flex flex-col items-end gap-2">
+          <span className="rounded-full bg-[#F5A623]/15 px-4 py-2 text-sm font-semibold text-[#F5A623]">{status}</span>
+          {auth.authenticated && (
+            <button className="text-sm font-semibold text-[#D6D3C4] underline" onClick={handleLogout} type="button">
+              Sair
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <form className="space-y-4" onSubmit={handleSubmit}>
+      {!auth.authenticated ? (
+        <form className="grid gap-4 rounded-2xl border border-white/10 bg-[#0C1A2E] p-5 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleLogin}>
           <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Tema do pacote</span>
+            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">E-mail</span>
             <input
-              className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
-              value={form.title}
-              onChange={(event) => setForm({ ...form, title: event.target.value })}
-              minLength={3}
+              className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+              type="email"
+              value={login.email}
+              onChange={(event) => setLogin({ ...login, email: event.target.value })}
               required
             />
           </label>
-
           <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Objetivo</span>
+            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Senha</span>
             <input
-              className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
-              value={form.objective}
-              onChange={(event) => setForm({ ...form, objective: event.target.value })}
-              minLength={3}
+              className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+              type="password"
+              value={login.password}
+              onChange={(event) => setLogin({ ...login, password: event.target.value })}
+              minLength={8}
               required
             />
           </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Plataforma prioritária</span>
-            <input
-              className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
-              value={form.primaryPlatform}
-              onChange={(event) => setForm({ ...form, primaryPlatform: event.target.value })}
-              minLength={2}
-              required
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Contexto estratégico</span>
-            <textarea
-              className="min-h-32 w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
-              value={form.context}
-              onChange={(event) => setForm({ ...form, context: event.target.value })}
-              minLength={3}
-              required
-            />
-          </label>
-
           <button
-            className="w-full rounded-full bg-[#F5A623] px-6 py-4 font-black text-[#071120] transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full bg-[#F5A623] px-6 py-4 font-black text-[#071120] transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
             type="submit"
-            disabled={isSubmitting}
+            disabled={isLoggingIn}
           >
-            {isSubmitting ? "Executando..." : "Executar pacote agora"}
+            {isLoggingIn ? "Entrando..." : "Entrar no Cortex"}
           </button>
         </form>
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Tema do pacote</span>
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={form.title}
+                onChange={(event) => setForm({ ...form, title: event.target.value })}
+                minLength={3}
+                required
+              />
+            </label>
 
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Metric label="Jobs" value={payload?.metrics.jobs ?? 0} />
-            <Metric label="Artifacts" value={payload?.metrics.artifacts ?? 0} />
-            <Metric label="Tokens" value={(payload?.metrics.inputTokens ?? 0) + (payload?.metrics.outputTokens ?? 0)} />
-            <Metric label="Custo USD" value={payload?.metrics.costUsd ?? "0"} />
-          </div>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Objetivo</span>
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={form.objective}
+                onChange={(event) => setForm({ ...form, objective: event.target.value })}
+                minLength={3}
+                required
+              />
+            </label>
 
-          <div className="rounded-2xl border border-white/10 bg-[#0C1A2E] p-4">
-            <h4 className="text-lg font-bold">Jobs recentes</h4>
-            <div className="mt-4 space-y-3">
-              {(payload?.jobs ?? []).slice(0, 4).map((job) => (
-                <div key={job.id} className="rounded-2xl border border-white/10 bg-[#142A42] p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-bold">{job.briefing?.title ?? job.skill}</p>
-                    <span className="rounded-full bg-[#2487D8]/15 px-3 py-1 text-xs font-bold text-[#7DC8F5]">{job.status}</span>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Plataforma prioritária</span>
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={form.primaryPlatform}
+                onChange={(event) => setForm({ ...form, primaryPlatform: event.target.value })}
+                minLength={2}
+                required
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Contexto estratégico</span>
+              <textarea
+                className="min-h-32 w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={form.context}
+                onChange={(event) => setForm({ ...form, context: event.target.value })}
+                minLength={3}
+                required
+              />
+            </label>
+
+            <button
+              className="w-full rounded-full bg-[#F5A623] px-6 py-4 font-black text-[#071120] transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Executando..." : "Executar pacote agora"}
+            </button>
+          </form>
+
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Metric label="Jobs" value={payload?.metrics.jobs ?? 0} />
+              <Metric label="Artifacts" value={payload?.metrics.artifacts ?? 0} />
+              <Metric label="Tokens" value={(payload?.metrics.inputTokens ?? 0) + (payload?.metrics.outputTokens ?? 0)} />
+              <Metric label="Custo USD" value={payload?.metrics.costUsd ?? "0"} />
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#0C1A2E] p-4">
+              <h4 className="text-lg font-bold">Jobs recentes</h4>
+              <div className="mt-4 space-y-3">
+                {(payload?.jobs ?? []).slice(0, 4).map((job) => (
+                  <div key={job.id} className="rounded-2xl border border-white/10 bg-[#142A42] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-bold">{job.briefing?.title ?? job.skill}</p>
+                      <span className="rounded-full bg-[#2487D8]/15 px-3 py-1 text-xs font-bold text-[#7DC8F5]">{job.status}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-[#D6D3C4]">{job.briefing?.objective}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#7DC8F5]">
+                      {job.usageLedger?.[0]?.provider ?? "provider pendente"} · {job.usageLedger?.[0]?.outputTokens ?? 0} tokens saída
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm text-[#D6D3C4]">{job.briefing?.objective}</p>
-                  <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#7DC8F5]">
-                    {job.usageLedger?.[0]?.provider ?? "provider pendente"} · {job.usageLedger?.[0]?.outputTokens ?? 0} tokens saída
-                  </p>
-                </div>
-              ))}
-              {!payload?.jobs.length && <p className="text-sm text-[#D6D3C4]">Nenhum job criado ainda.</p>}
+                ))}
+                {!payload?.jobs.length && <p className="text-sm text-[#D6D3C4]">Nenhum job criado ainda.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#F5A623]/20 bg-[#F5A623]/10 p-4">
+              <h4 className="text-lg font-bold text-[#F5A623]">Artifact gerado</h4>
+              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-[#071120]/80 p-4 text-sm leading-6 text-[#F9E6BC]">
+                {latestArtifact?.content ?? "Crie um pacote para visualizar o markdown persistido."}
+              </pre>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-[#F5A623]/20 bg-[#F5A623]/10 p-4">
-            <h4 className="text-lg font-bold text-[#F5A623]">Artifact gerado</h4>
-            <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-[#071120]/80 p-4 text-sm leading-6 text-[#F9E6BC]">
-              {latestArtifact?.content ?? "Crie um pacote para visualizar o markdown persistido."}
-            </pre>
-          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

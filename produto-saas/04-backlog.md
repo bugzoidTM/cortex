@@ -15,8 +15,8 @@
 - [x] Inicializar app Next.js.
 - [x] Configurar PostgreSQL.
 - [x] Escolher ORM: Prisma ou Drizzle.
-- [ ] Implementar autenticação.
-- [ ] Implementar organizações/tenants.
+- [x] Implementar autenticação.
+- [x] Implementar organizações/tenants.
 - [ ] Implementar perfis de marca.
 - [x] Implementar briefings.
 - [ ] Implementar jobs assíncronos.
@@ -66,9 +66,10 @@
 3. [x] Implementar protótipo das telas com dados mockados.
 4. [x] Validar fluxo com build local.
 5. [x] Ligar banco e fluxo de dados real após consolidar modelo do MVP.
-6. [ ] Implementar autenticação e tenants reais.
+6. [x] Implementar autenticação e tenants reais.
 7. [ ] Configurar LLM real via Docker secret.
-8. [ ] Converter jobs para fila/worker.
+8. [ ] Implementar perfis de marca editáveis.
+9. [ ] Converter jobs para fila/worker.
 
 ## Critério de corte
 

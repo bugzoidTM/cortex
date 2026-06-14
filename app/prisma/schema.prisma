@@ -21,6 +21,46 @@ model Tenant {
   jobs         SkillJob[]
   artifacts    Artifact[]
   usageLedger  LLMUsageLedger[]
+  memberships  TenantMembership[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships TenantMembership[]
+  sessions     Session[]
+}
+
+model TenantMembership {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      String   @default("owner")
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model BrandProfile {
