@@ -49,9 +49,11 @@ Atualizado em: 2026-06-14
    - O LLM Gateway já usa `BrandProfile` do tenant no prompt.
 
 5. Jobs assíncronos
-   - Trocar execução síncrona do `POST /api/jobs` por fila/worker.
-   - Recomendado: Redis + BullMQ ou Postgres queue simples no MVP.
-   - Estados reais: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `CANCELLED`.
+   - Status: implementado para beta inicial com fila Postgres simples.
+   - `POST /api/jobs` cria `SkillJob` como `PENDING` e retorna `202`.
+   - Serviço Swarm `cortex_worker` executa `scripts/cortex-worker.mjs`, marca `PROCESSING`, gera artifact/ledger e conclui como `COMPLETED` ou `FAILED`.
+   - `SkillJob` rastreia `attempts` e `lockedAt`.
+   - Próximo endurecimento: retry com backoff, tela de reprocessar job falho e timeout por provider.
 
 6. Limites e proteção de margem
    - Status: implementado para beta inicial.
@@ -62,15 +64,20 @@ Atualizado em: 2026-06-14
    - Próximo endurecimento: upgrade/downgrade automático por plano e cobrança de excedente.
 
 7. Segurança operacional
+   - Status: parcialmente implementado para beta inicial.
    - Secrets reais apenas em Docker secrets ou secret manager.
-   - Rate limit em `POST /api/jobs`.
+   - Rate limit persistente em `POST /api/jobs` via `RateLimitEvent`.
    - Validação/normalização de inputs sensíveis.
-   - Logs sem prompts completos quando houver dados confidenciais.
+   - Logs estruturados JSON no worker e backup.
+   - Próximo endurecimento: rate limit de login, auditoria admin e logs sem prompts completos quando houver dados confidenciais.
 
 8. Backup e recuperação
-   - Script de backup PostgreSQL diário.
-   - Teste de restore documentado.
-   - Retenção mínima de backups.
+   - Status: implementado para beta inicial.
+   - Serviço Swarm `cortex_backup` roda `scripts/backup-postgres.sh` diariamente.
+   - Backups ficam no volume `cortex_postgres_backups` em formato custom `pg_dump -Fc`.
+   - Retenção configurada por `CORTEX_BACKUP_RETENTION_DAYS=7`.
+   - Smoke de restore/listagem validado com `pg_restore -l` no arquivo gerado.
+   - Próximo endurecimento: copiar backup para storage externo e alerta de falha.
 
 9. Observabilidade mínima
    - Logs estruturados para jobs e LLM Gateway.
@@ -95,6 +102,6 @@ Atualizado em: 2026-06-14
 
 ## Próxima sequência recomendada
 
-1. Converter `POST /api/jobs` síncrono para fila/worker.
-2. Adicionar rate limit em `POST /api/jobs`.
-3. Implementar backup PostgreSQL diário e teste de restore.
+1. Implementar checkout/assinatura e status de pagamento por tenant.
+2. Implementar reset de senha e convite de usuários.
+3. Adicionar auditoria administrativa e rate limit de login.

@@ -17,7 +17,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "test:quota-guard": "node scripts/test-quota-guard-contract.mjs",
-    "test:admin-panel": "node scripts/test-admin-panel-contract.mjs"
+    "test:admin-panel": "node scripts/test-admin-panel-contract.mjs",
+    "test:production-hardening": "node scripts/test-production-hardening-contract.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1",

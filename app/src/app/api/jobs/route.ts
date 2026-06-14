@@ -1,5 +1,6 @@
 import { AuthRequiredError, requireCurrentSession } from "@/lib/auth";
-import { createContentPackageJob, createJobInputSchema, getMvpSnapshot, QuotaExceededError } from "@/lib/cortex-mvp";
+import { createJobInputSchema, enqueueContentPackageJob, getMvpSnapshot, QuotaExceededError } from "@/lib/cortex-mvp";
+import { checkRateLimit, jobCreationRateLimitKey, RateLimitExceededError } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireCurrentSession();
+    await checkRateLimit({ key: jobCreationRateLimitKey(session), action: "create_job", limit: 10, windowSeconds: 60 * 60 });
     const body = await request.json().catch(() => null);
     const parsed = createJobInputSchema.safeParse(body);
 
@@ -33,22 +35,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await createContentPackageJob(parsed.data, session.tenantId);
+    const result = await enqueueContentPackageJob(parsed.data, session.tenantId);
 
     return Response.json(
       {
         ok: true,
+        queued: true,
         job: result.job,
         briefing: result.briefing,
-        artifact: result.artifact,
-        ledger: result.ledger,
+        artifact: null,
+        ledger: null,
         quotaStatus: result.quotaStatus,
       },
-      { status: 201 },
+      { status: 202 },
     );
   } catch (error) {
     if (error instanceof AuthRequiredError) {
       return Response.json({ ok: false, error: "auth_required" }, { status: 401 });
+    }
+    if (error instanceof RateLimitExceededError) {
+      return Response.json({ ok: false, error: "rate_limited", retryAfterSeconds: error.retryAfterSeconds }, { status: 429 });
     }
     if (error instanceof QuotaExceededError) {
       return Response.json({ ok: false, error: "quota_exceeded", message: error.message, quotaStatus: error.quotaStatus }, { status: 402 });

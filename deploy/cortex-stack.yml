@@ -51,6 +51,48 @@ services:
         - traefik.http.services.cortex.loadbalancer.server.port=3000
         - traefik.http.services.cortex.loadbalancer.passHostHeader=true
 
+  worker:
+    image: cortex:latest
+    networks:
+      - Nutef
+    secrets:
+      - cortex_postgres_password
+      - cortex_openai_compatible_api_key
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      OPENAI_COMPATIBLE_PROVIDER: "closeai"
+      OPENAI_COMPATIBLE_BASE_URL: "https://closeai.nutef.com/v1"
+      OPENAI_COMPATIBLE_API_KEY_FILE: "/run/secrets/cortex_openai_compatible_api_key"
+      OPENAI_COMPATIBLE_MODEL: "qwen3.7-max"
+      OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS: "1800"
+      CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
+      CORTEX_WORKER_POLL_INTERVAL_MS: "5000"
+    command: >
+      sh -c 'DB_PASSWORD=$$(tr -d "\n" < /run/secrets/cortex_postgres_password); export DATABASE_URL="postgresql://cortex:$${DB_PASSWORD}@db:5432/cortex?schema=public"; node scripts/cortex-worker.mjs'
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+
+  backup:
+    image: cortex:latest
+    networks:
+      - Nutef
+    secrets:
+      - cortex_postgres_password
+    volumes:
+      - cortex_postgres_backups:/backups
+    environment:
+      CORTEX_BACKUP_DIR: "/backups"
+      CORTEX_BACKUP_RETENTION_DAYS: "7"
+      CORTEX_BACKUP_INTERVAL_SECONDS: "86400"
+    command: sh scripts/backup-postgres.sh
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+
 secrets:
   cortex_postgres_password:
     external: true
@@ -59,6 +101,8 @@ secrets:
 
 volumes:
   cortex_postgres_data:
+    external: false
+  cortex_postgres_backups:
     external: false
 
 networks:

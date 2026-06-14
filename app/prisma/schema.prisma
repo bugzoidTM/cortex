@@ -100,6 +100,8 @@ model SkillJob {
   input       Json
   output      Json?
   error       String?
+  attempts    Int       @default(0)
+  lockedAt    DateTime?
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -147,6 +149,15 @@ model LLMUsageLedger {
   job    SkillJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
+}
+
+model RateLimitEvent {
+  id        String   @id @default(cuid())
+  key       String
+  action    String
+  createdAt DateTime @default(now())
+
+  @@index([key, action, createdAt])
 }
 
 enum JobStatus {

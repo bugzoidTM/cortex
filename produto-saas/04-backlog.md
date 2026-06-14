@@ -19,8 +19,8 @@
 - [x] Implementar organizações/tenants.
 - [x] Implementar perfis de marca.
 - [x] Implementar briefings.
-- [ ] Implementar jobs assíncronos.
-- [ ] Implementar worker.
+- [x] Implementar jobs assíncronos.
+- [x] Implementar worker.
 - [x] Implementar ledger de uso.
 
 ### IA
@@ -35,8 +35,8 @@
 ### Operação
 
 - [ ] Docker Compose com web, worker, postgres, redis e proxy.
-- [ ] Script de backup PostgreSQL.
-- [ ] Logs estruturados.
+- [x] Script de backup PostgreSQL.
+- [x] Logs estruturados.
 - [x] Admin Nutef para visualizar usuários, jobs e consumo.
 
 ## P1 — Importante após beta
@@ -67,9 +67,9 @@
 4. [x] Validar fluxo com build local.
 5. [x] Ligar banco e fluxo de dados real após consolidar modelo do MVP.
 6. [x] Implementar autenticação e tenants reais.
-7. [ ] Configurar LLM real via Docker secret.
+7. [x] Configurar LLM real via Docker secret.
 8. [x] Implementar perfis de marca editáveis.
-9. [ ] Converter jobs para fila/worker.
+9. [x] Converter jobs para fila/worker.
 
 ## Critério de corte
 

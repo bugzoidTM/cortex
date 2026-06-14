@@ -12,6 +12,7 @@ RUN npx prisma generate && npm run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
+RUN apk add --no-cache postgresql-client
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
@@ -24,6 +25,7 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src ./src
 
 EXPOSE 3000
 CMD ["sh", "-c", "DB_PASSWORD=$(tr -d '\\n' < /run/secrets/cortex_postgres_password); export DATABASE_URL=\"postgresql://cortex:${DB_PASSWORD}@db:5432/cortex?schema=public\"; until npx prisma migrate deploy; do echo 'waiting for cortex db/migrations'; sleep 3; done; npm run start"]

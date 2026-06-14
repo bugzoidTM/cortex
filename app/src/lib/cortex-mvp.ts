@@ -13,6 +13,7 @@ export const createJobInputSchema = z.object({
 export type CreateJobInput = z.infer<typeof createJobInputSchema>;
 
 const DEFAULT_MAX_JOB_INPUT_TOKENS = 2_500;
+const MAX_WORKER_ATTEMPTS = 3;
 
 export class QuotaExceededError extends Error {
   constructor(
@@ -153,15 +154,14 @@ export async function getMvpSnapshot(tenantId?: string) {
   };
 }
 
-export async function createContentPackageJob(input: CreateJobInput, tenantId?: string) {
+export async function enqueueContentPackageJob(input: CreateJobInput, tenantId?: string) {
   const parsed = createJobInputSchema.parse(input);
   const tenant = tenantId
     ? await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { brandProfile: true } })
     : await ensureDemoTenant();
-  const preflightQuotaStatus = await assertTenantCanCreateJob(tenant.id, parsed);
-  const generation = await generateContentPackageArtifact(parsed, tenant.brandProfile);
+  const quotaStatus = await assertTenantCanCreateJob(tenant.id, parsed);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const briefing = await tx.briefing.create({
       data: {
         tenantId: tenant.id,
@@ -177,43 +177,104 @@ export async function createContentPackageJob(input: CreateJobInput, tenantId?: 
         tenantId: tenant.id,
         briefingId: briefing.id,
         skill: parsed.skill,
-        status: "COMPLETED",
-        startedAt: new Date(),
-        completedAt: new Date(),
+        status: "PENDING",
         input: parsed,
-        output: {
-          summary: generation.summary,
+      },
+    });
+
+    return { briefing, job };
+  });
+
+  return { tenant, briefing: result.briefing, job: result.job, quotaStatus };
+}
+
+export async function processNextContentPackageJob() {
+  const job = await prisma.skillJob.findFirst({
+    where: { status: "PENDING", attempts: { lt: MAX_WORKER_ATTEMPTS } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!job) {
+    return null;
+  }
+
+  const claimed = await prisma.skillJob.updateMany({
+    where: { id: job.id, status: "PENDING" },
+    data: { status: "PROCESSING", lockedAt: new Date(), startedAt: new Date(), attempts: { increment: 1 }, error: null },
+  });
+
+  if (claimed.count !== 1) {
+    return null;
+  }
+
+  return processContentPackageJob(job.id);
+}
+
+export async function processContentPackageJob(jobId: string) {
+  const job = await prisma.skillJob.findUniqueOrThrow({
+    where: { id: jobId },
+    include: { tenant: { include: { brandProfile: true } }, briefing: true },
+  });
+
+  const parsed = createJobInputSchema.parse(job.input);
+
+  try {
+    const generation = await generateContentPackageArtifact(parsed, job.tenant.brandProfile);
+
+    return prisma.$transaction(async (tx) => {
+      const updatedJob = await tx.skillJob.update({
+        where: { id: job.id },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          lockedAt: null,
+          output: {
+            summary: generation.summary,
+            provider: generation.provider,
+            model: generation.model,
+            status: generation.status,
+          },
+        },
+      });
+
+      const artifact = await tx.artifact.create({
+        data: {
+          tenantId: job.tenantId,
+          jobId: job.id,
+          type: "content_package",
+          title: `Pacote: ${parsed.title}`,
+          content: generation.content,
+        },
+      });
+
+      const ledger = await tx.lLMUsageLedger.create({
+        data: {
+          tenantId: job.tenantId,
+          jobId: job.id,
           provider: generation.provider,
           model: generation.model,
+          inputTokens: generation.inputTokens,
+          outputTokens: generation.outputTokens,
+          costUsd: generation.costUsd,
+          latencyMs: generation.latencyMs,
           status: generation.status,
         },
-      },
-    });
+      });
 
-    const artifact = await tx.artifact.create({
-      data: {
-        tenantId: tenant.id,
-        jobId: job.id,
-        type: "content_package",
-        title: `Pacote: ${parsed.title}`,
-        content: generation.content,
-      },
+      return { job: updatedJob, artifact, ledger };
     });
-
-    const ledger = await tx.lLMUsageLedger.create({
-      data: {
-        tenantId: tenant.id,
-        jobId: job.id,
-        provider: generation.provider,
-        model: generation.model,
-        inputTokens: generation.inputTokens,
-        outputTokens: generation.outputTokens,
-        costUsd: generation.costUsd,
-        latencyMs: generation.latencyMs,
-        status: generation.status,
-      },
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "worker_unknown_error";
+    const failed = await prisma.skillJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", error: message, completedAt: new Date(), lockedAt: null },
     });
+    return { job: failed, artifact: null, ledger: null };
+  }
+}
 
-    return { tenant, briefing, job, artifact, ledger, quotaStatus: preflightQuotaStatus };
-  });
+export async function createContentPackageJob(input: CreateJobInput, tenantId?: string) {
+  const enqueued = await enqueueContentPackageJob(input, tenantId);
+  const processed = await processContentPackageJob(enqueued.job.id);
+  return { ...enqueued, ...processed };
 }
