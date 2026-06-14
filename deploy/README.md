@@ -58,7 +58,21 @@ Resultado esperado:
 - `GET /api/mvp`: retorna tenant demo, jobs recentes e métricas.
 - `GET /api/jobs`: retorna jobs e métricas.
 - `POST /api/jobs`: cria briefing, job concluído, artifact markdown e ledger de uso determinístico para validar o fluxo de dados real.
+- LLM Gateway: `src/lib/llm-gateway.ts` usa provider OpenAI-compatible quando `OPENAI_COMPATIBLE_API_KEY` e `OPENAI_COMPATIBLE_BASE_URL` estão configurados; sem chave, usa fallback determinístico seguro e registra `provider`, `model`, tokens, custo e status no ledger.
 - UI `/`: console interativo "Criar pacote real" chama `POST /api/jobs`, recarrega `GET /api/jobs`, lista jobs recentes, mostra métricas e pré-visualiza o artifact markdown.
+
+## Configurar LLM real
+
+Definir no ambiente do serviço web, preferencialmente via secret para a chave:
+
+- `OPENAI_COMPATIBLE_API_KEY`
+- `OPENAI_COMPATIBLE_BASE_URL` — exemplo: `https://api.openai.com/v1`
+- `OPENAI_COMPATIBLE_MODEL` — exemplo: `gpt-4o-mini`
+- `OPENAI_COMPATIBLE_PROVIDER` — nome lógico do provedor
+- `OPENAI_COMPATIBLE_INPUT_COST_PER_1M` — opcional para custo estimado
+- `OPENAI_COMPATIBLE_OUTPUT_COST_PER_1M` — opcional para custo estimado
+
+Sem essas variáveis, o Cortex continua funcional com `provider=internal-mvp`, `model=deterministic-template-v1` e `status=fallback`.
 
 ## Observação de segurança
 

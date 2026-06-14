@@ -22,6 +22,8 @@ type SkillJob = {
     primaryPlatform: string;
   } | null;
   usageLedger?: Array<{
+    provider: string;
+    model: string;
     inputTokens: number;
     outputTokens: number;
     costUsd: string;
@@ -188,6 +190,9 @@ export function CortexJobConsole() {
                     <span className="rounded-full bg-[#2487D8]/15 px-3 py-1 text-xs font-bold text-[#7DC8F5]">{job.status}</span>
                   </div>
                   <p className="mt-2 text-sm text-[#D6D3C4]">{job.briefing?.objective}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#7DC8F5]">
+                    {job.usageLedger?.[0]?.provider ?? "provider pendente"} · {job.usageLedger?.[0]?.outputTokens ?? 0} tokens saída
+                  </p>
                 </div>
               ))}
               {!payload?.jobs.length && <p className="text-sm text-[#D6D3C4]">Nenhum job criado ainda.</p>}

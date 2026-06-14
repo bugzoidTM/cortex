@@ -10,6 +10,7 @@
     "test:smoke": "node scripts/smoke-cortex-ui.mjs",
     "test:data-contract": "node scripts/test-mvp-data-contract.mjs",
     "test:interactive-ui": "node scripts/test-interactive-jobs-ui.mjs",
+    "test:llm-gateway": "node scripts/test-llm-gateway.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy"
   },

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { generateContentPackageArtifact } from "./llm-gateway";
 import { prisma } from "./prisma";
 
 export const createJobInputSchema = z.object({
@@ -66,6 +67,7 @@ export async function getMvpSnapshot() {
 export async function createContentPackageJob(input: CreateJobInput) {
   const parsed = createJobInputSchema.parse(input);
   const tenant = await ensureDemoTenant();
+  const generation = await generateContentPackageArtifact(parsed, tenant.brandProfile);
 
   return prisma.$transaction(async (tx) => {
     const briefing = await tx.briefing.create({
@@ -88,8 +90,10 @@ export async function createContentPackageJob(input: CreateJobInput) {
         completedAt: new Date(),
         input: parsed,
         output: {
-          summary: "Pacote MVP gerado em modo determinístico para validar fluxo de dados real.",
-          items: ["Post LinkedIn", "Roteiro Reels/TikTok", "Carrossel outline", "Legendas curtas", "E-mail/newsletter"],
+          summary: generation.summary,
+          provider: generation.provider,
+          model: generation.model,
+          status: generation.status,
         },
       },
     });
@@ -100,19 +104,7 @@ export async function createContentPackageJob(input: CreateJobInput) {
         jobId: job.id,
         type: "content_package",
         title: `Pacote: ${parsed.title}`,
-        content: [
-          `# Pacote de conteúdo — ${parsed.title}`,
-          "",
-          `Objetivo: ${parsed.objective}`,
-          `Plataforma prioritária: ${parsed.primaryPlatform}`,
-          "",
-          "## Entregáveis",
-          "- Post LinkedIn",
-          "- Roteiro Reels/TikTok",
-          "- Carrossel em outline",
-          "- 3 legendas curtas",
-          "- E-mail/newsletter",
-        ].join("\n"),
+        content: generation.content,
       },
     });
 
@@ -120,13 +112,13 @@ export async function createContentPackageJob(input: CreateJobInput) {
       data: {
         tenantId: tenant.id,
         jobId: job.id,
-        provider: "internal-mvp",
-        model: "deterministic-template-v1",
-        inputTokens: Math.ceil(JSON.stringify(parsed).length / 4),
-        outputTokens: Math.ceil(artifact.content.length / 4),
-        costUsd: "0",
-        latencyMs: 0,
-        status: "completed",
+        provider: generation.provider,
+        model: generation.model,
+        inputTokens: generation.inputTokens,
+        outputTokens: generation.outputTokens,
+        costUsd: generation.costUsd,
+        latencyMs: generation.latencyMs,
+        status: generation.status,
       },
     });
 
