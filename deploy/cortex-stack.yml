@@ -29,6 +29,8 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
+      OPENAI_COMPATIBLE_PROVIDER: "openai-compatible"
+      OPENAI_COMPATIBLE_MODEL: "gpt-4o-mini"
     deploy:
       replicas: 1
       restart_policy:

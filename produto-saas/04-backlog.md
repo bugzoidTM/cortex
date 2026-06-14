@@ -4,33 +4,33 @@
 
 ### Produto/UX
 
-- [ ] Criar mapa de navegação do app.
-- [ ] Criar wireframes das telas principais.
-- [ ] Definir copy do onboarding.
-- [ ] Definir pacote padrão de conteúdo gerado.
-- [ ] Definir estados de job: pendente, processando, concluído, falhou, cancelado.
+- [x] Criar mapa de navegação do app.
+- [x] Criar wireframes das telas principais.
+- [x] Definir copy do onboarding.
+- [x] Definir pacote padrão de conteúdo gerado.
+- [x] Definir estados de job: pendente, processando, concluído, falhou, cancelado.
 
 ### Backend
 
-- [ ] Inicializar app Next.js.
-- [ ] Configurar PostgreSQL.
-- [ ] Escolher ORM: Prisma ou Drizzle.
+- [x] Inicializar app Next.js.
+- [x] Configurar PostgreSQL.
+- [x] Escolher ORM: Prisma ou Drizzle.
 - [ ] Implementar autenticação.
 - [ ] Implementar organizações/tenants.
 - [ ] Implementar perfis de marca.
-- [ ] Implementar briefings.
+- [x] Implementar briefings.
 - [ ] Implementar jobs assíncronos.
 - [ ] Implementar worker.
-- [ ] Implementar ledger de uso.
+- [x] Implementar ledger de uso.
 
 ### IA
 
-- [ ] Criar abstração de provider OpenAI-compatible.
+- [x] Criar abstração de provider OpenAI-compatible.
 - [ ] Criar prompt de análise de voz.
-- [ ] Criar prompt de geração de pacote.
+- [x] Criar prompt de geração de pacote.
 - [ ] Criar prompt de revisão/qualidade.
 - [ ] Adicionar limites de tokens por execução.
-- [ ] Registrar modelo, tokens e custo estimado por job.
+- [x] Registrar modelo, tokens e custo estimado por job.
 
 ### Operação
 
@@ -65,7 +65,10 @@
 2. [x] Montar layout base com identidade Cortex.
 3. [x] Implementar protótipo das telas com dados mockados.
 4. [x] Validar fluxo com build local.
-5. [ ] Ligar banco/autenticação após consolidar modelo de dados do MVP.
+5. [x] Ligar banco e fluxo de dados real após consolidar modelo do MVP.
+6. [ ] Implementar autenticação e tenants reais.
+7. [ ] Configurar LLM real via Docker secret.
+8. [ ] Converter jobs para fila/worker.
 
 ## Critério de corte
 

@@ -56,6 +56,7 @@ Resultado esperado:
 
 - `GET /api/health`: valida app + conexão PostgreSQL.
 - `GET /api/mvp`: retorna tenant demo, jobs recentes e métricas.
+- `GET /api/runtime`: retorna status sanitizado de banco e LLM Gateway, sem expor segredos.
 - `GET /api/jobs`: retorna jobs e métricas.
 - `POST /api/jobs`: cria briefing, job concluído, artifact markdown e ledger de uso determinístico para validar o fluxo de dados real.
 - LLM Gateway: `src/lib/llm-gateway.ts` usa provider OpenAI-compatible quando `OPENAI_COMPATIBLE_API_KEY` e `OPENAI_COMPATIBLE_BASE_URL` estão configurados; sem chave, usa fallback determinístico seguro e registra `provider`, `model`, tokens, custo e status no ledger.
@@ -65,7 +66,7 @@ Resultado esperado:
 
 Definir no ambiente do serviço web, preferencialmente via secret para a chave:
 
-- `OPENAI_COMPATIBLE_API_KEY`
+- `OPENAI_COMPATIBLE_API_KEY` ou `OPENAI_COMPATIBLE_API_KEY_FILE` apontando para um Docker secret montado.
 - `OPENAI_COMPATIBLE_BASE_URL` — exemplo: `https://api.openai.com/v1`
 - `OPENAI_COMPATIBLE_MODEL` — exemplo: `gpt-4o-mini`
 - `OPENAI_COMPATIBLE_PROVIDER` — nome lógico do provedor

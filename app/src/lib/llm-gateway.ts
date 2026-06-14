@@ -1,3 +1,4 @@
+import { readSecretEnv } from "./runtime-config";
 import type { CreateJobInput } from "./cortex-mvp";
 
 type BrandContext = {
@@ -32,7 +33,7 @@ const DEFAULT_MODEL = "deterministic-template-v1";
 
 export async function generateContentPackageArtifact(input: CreateJobInput, brand?: BrandContext | null): Promise<GatewayResult> {
   const startedAt = Date.now();
-  const apiKey = process.env.OPENAI_COMPATIBLE_API_KEY;
+  const apiKey = readSecretEnv("OPENAI_COMPATIBLE_API_KEY");
   const baseUrl = process.env.OPENAI_COMPATIBLE_BASE_URL;
   const model = process.env.OPENAI_COMPATIBLE_MODEL ?? "gpt-4o-mini";
   const provider = process.env.OPENAI_COMPATIBLE_PROVIDER ?? "openai-compatible";
