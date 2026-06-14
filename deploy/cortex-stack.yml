@@ -31,6 +31,8 @@ services:
       HOSTNAME: "0.0.0.0"
       OPENAI_COMPATIBLE_PROVIDER: "openai-compatible"
       OPENAI_COMPATIBLE_MODEL: "gpt-4o-mini"
+      OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS: "1800"
+      CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
     deploy:
       replicas: 1
       restart_policy:

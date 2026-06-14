@@ -29,7 +29,7 @@
 - [ ] Criar prompt de análise de voz.
 - [x] Criar prompt de geração de pacote.
 - [ ] Criar prompt de revisão/qualidade.
-- [ ] Adicionar limites de tokens por execução.
+- [x] Adicionar limites de tokens por execução.
 - [x] Registrar modelo, tokens e custo estimado por job.
 
 ### Operação

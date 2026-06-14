@@ -54,6 +54,7 @@ export async function generateContentPackageArtifact(input: CreateJobInput, bran
       body: JSON.stringify({
         model,
         temperature: 0.7,
+        max_tokens: getMaxOutputTokens(),
         messages,
       }),
     });
@@ -174,6 +175,14 @@ function deterministicFallback(input: CreateJobInput, brand: BrandContext | null
     latencyMs,
     status: "fallback",
   };
+}
+
+function getMaxOutputTokens() {
+  const configured = Number(process.env.OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS ?? "1800");
+  if (!Number.isFinite(configured) || configured < 256) {
+    return 1800;
+  }
+  return Math.min(Math.floor(configured), 8000);
 }
 
 function estimateTokens(text: string) {

@@ -15,7 +15,8 @@
     "test:auth-tenancy": "node scripts/test-auth-tenancy-contract.mjs",
     "test:brand-profile": "node scripts/test-brand-profile-contract.mjs",
     "prisma:generate": "prisma generate",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "test:quota-guard": "node scripts/test-quota-guard-contract.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1",

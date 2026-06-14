@@ -53,10 +53,12 @@ Atualizado em: 2026-06-14
    - Estados reais: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `CANCELLED`.
 
 6. Limites e proteção de margem
-   - Validar quota mensal antes de criar job.
-   - Definir limite de tokens por execução.
-   - Estimar custo antes/depois do job.
-   - Bloquear ou degradar plano quando quota acabar.
+   - Status: implementado para beta inicial.
+   - `POST /api/jobs` valida quota mensal antes de chamar o LLM.
+   - UI mostra plano, tokens usados, tokens restantes e limite por execução.
+   - `OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS` limita saída do provider.
+   - `CORTEX_MAX_JOB_INPUT_TOKENS` limita entrada estimada por execução.
+   - Próximo endurecimento: upgrade/downgrade automático por plano e cobrança de excedente.
 
 7. Segurança operacional
    - Secrets reais apenas em Docker secrets ou secret manager.
@@ -92,7 +94,6 @@ Atualizado em: 2026-06-14
 ## Próxima sequência recomendada
 
 1. Configurar LLM real via Docker secret e validar `llm.configured=true`.
-2. Implementar auth mínima.
-3. Transformar tenant demo em tenant por sessão.
-4. Adicionar edição de perfil de marca.
-5. Converter jobs para fila/worker.
+2. Converter jobs para fila/worker.
+3. Adicionar rate limit em `POST /api/jobs`.
+4. Implementar backup PostgreSQL diário e teste de restore.

@@ -39,6 +39,17 @@ type JobsPayload = {
     outputTokens: number;
     costUsd: string;
   };
+  quotaStatus?: {
+    plan: string;
+    monthlyQuota: number;
+    usedTokens: number;
+    remainingTokens: number;
+    usagePercent: number;
+    estimatedJobTokens: number;
+    maxJobInputTokens: number;
+    canCreateJob: boolean;
+    resetPeriod: string;
+  };
 };
 
 type AuthState = {
@@ -231,6 +242,7 @@ export function CortexJobConsole() {
 
   const latestJob = payload?.jobs[0];
   const latestArtifact = useMemo(() => latestJob?.artifacts?.[0], [latestJob]);
+  const quotaStatus = payload?.quotaStatus;
 
   return (
     <div className="rounded-[2rem] border border-[#2487D8]/20 bg-[#071120] p-5 shadow-2xl shadow-black/30 lg:p-6">
@@ -403,6 +415,24 @@ export function CortexJobConsole() {
               <Metric label="Artifacts" value={payload?.metrics.artifacts ?? 0} />
               <Metric label="Tokens" value={(payload?.metrics.inputTokens ?? 0) + (payload?.metrics.outputTokens ?? 0)} />
               <Metric label="Custo USD" value={payload?.metrics.costUsd ?? "0"} />
+            </div>
+
+            <div className="rounded-2xl border border-[#2487D8]/20 bg-[#142A42] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7DC8F5]">Quota mensal</p>
+                  <h4 className="mt-1 text-lg font-black">Plano {quotaStatus?.plan ?? "—"}</h4>
+                </div>
+                <span className="rounded-full bg-[#F5A623]/15 px-3 py-1 text-sm font-bold text-[#F5A623]">
+                  {quotaStatus?.remainingTokens ?? 0} tokens restantes
+                </span>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#071120]">
+                <div className="h-full rounded-full bg-[#F5A623]" style={{ width: `${quotaStatus?.usagePercent ?? 0}%` }} />
+              </div>
+              <p className="mt-2 text-sm text-[#D6D3C4]">
+                {quotaStatus?.usedTokens ?? 0} de {quotaStatus?.monthlyQuota ?? 0} tokens usados neste mês · limite por execução: {quotaStatus?.maxJobInputTokens ?? 0} tokens de entrada.
+              </p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-[#0C1A2E] p-4">
