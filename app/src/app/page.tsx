@@ -1,3 +1,5 @@
+import { CortexJobConsole } from "./components/cortex-job-console";
+
 const flowSteps = [
   {
     label: "01",
@@ -198,6 +200,9 @@ export default function Home() {
               </article>
             ))}
           </div>
+        </div>
+        <div className="mx-auto mt-10 max-w-7xl">
+          <CortexJobConsole />
         </div>
       </section>
 

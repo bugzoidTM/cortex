@@ -58,6 +58,7 @@ Resultado esperado:
 - `GET /api/mvp`: retorna tenant demo, jobs recentes e métricas.
 - `GET /api/jobs`: retorna jobs e métricas.
 - `POST /api/jobs`: cria briefing, job concluído, artifact markdown e ledger de uso determinístico para validar o fluxo de dados real.
+- UI `/`: console interativo "Criar pacote real" chama `POST /api/jobs`, recarrega `GET /api/jobs`, lista jobs recentes, mostra métricas e pré-visualiza o artifact markdown.
 
 ## Observação de segurança
 

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:smoke": "node scripts/smoke-cortex-ui.mjs",
     "test:data-contract": "node scripts/test-mvp-data-contract.mjs",
+    "test:interactive-ui": "node scripts/test-interactive-jobs-ui.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy"
   },
