@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id           String           @id @default(cuid())
+  slug         String           @unique
+  name         String
+  plan         String           @default("beta")
+  monthlyQuota Int              @default(1000000)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  brandProfile BrandProfile?
+  briefings    Briefing[]
+  jobs         SkillJob[]
+  artifacts    Artifact[]
+  usageLedger  LLMUsageLedger[]
+}
+
+model BrandProfile {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  tone          String
+  audience      String
+  promise       String
+  restrictions  String[] @default([])
+  sampleContent String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Briefing {
+  id              String   @id @default(cuid())
+  tenantId        String
+  title           String
+  objective       String
+  primaryPlatform String
+  context         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobs   SkillJob[]
+}
+
+model SkillJob {
+  id          String    @id @default(cuid())
+  tenantId    String
+  briefingId  String?
+  skill       String
+  status      JobStatus @default(PENDING)
+  input       Json
+  output      Json?
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  briefing    Briefing?        @relation(fields: [briefingId], references: [id], onDelete: SetNull)
+  artifacts   Artifact[]
+  usageLedger LLMUsageLedger[]
+
+  @@index([tenantId, createdAt])
+  @@index([status])
+}
+
+model Artifact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  jobId     String?
+  type      String
+  title     String
+  content   String
+  format    String   @default("markdown")
+  createdAt DateTime @default(now())
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job    SkillJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
+
+model LLMUsageLedger {
+  id           String   @id @default(cuid())
+  tenantId     String
+  jobId        String?
+  provider     String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  costUsd      Decimal  @default(0) @db.Decimal(10, 6)
+  latencyMs    Int      @default(0)
+  status       String
+  createdAt    DateTime @default(now())
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job    SkillJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}

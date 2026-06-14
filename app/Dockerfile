@@ -8,7 +8,7 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN npx prisma generate && npm run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -22,6 +22,7 @@ COPY --from=builder /app/package-lock.json ./package-lock.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "DB_PASSWORD=$(tr -d '\\n' < /run/secrets/cortex_postgres_password); export DATABASE_URL=\"postgresql://cortex:${DB_PASSWORD}@db:5432/cortex?schema=public\"; until npx prisma migrate deploy; do echo 'waiting for cortex db/migrations'; sleep 3; done; npm run start"]
