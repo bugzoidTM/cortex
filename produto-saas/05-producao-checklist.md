@@ -42,9 +42,10 @@ Atualizado em: 2026-06-14
    - Próximo endurecimento: convite de usuários, múltiplos tenants por usuário e seletor de organização.
 
 4. Perfil de marca editável
-   - Tela/API para criar e atualizar voz da marca.
-   - Usar perfil real do tenant no prompt do LLM Gateway.
-   - Registrar exemplos aprovados e restrições por marca.
+   - Status: implementado para beta inicial.
+   - API protegida: `GET /api/brand-profile`, `PUT /api/brand-profile`.
+   - UI autenticada permite editar tom, público, promessa, restrições e exemplo aprovado.
+   - O LLM Gateway já usa `BrandProfile` do tenant no prompt.
 
 5. Jobs assíncronos
    - Trocar execução síncrona do `POST /api/jobs` por fila/worker.

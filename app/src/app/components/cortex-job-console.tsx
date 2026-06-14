@@ -47,6 +47,14 @@ type AuthState = {
   tenantId?: string;
 };
 
+type BrandProfileForm = {
+  tone: string;
+  audience: string;
+  promise: string;
+  restrictionsText: string;
+  sampleContent: string;
+};
+
 const initialForm = {
   title: "Como usar IA para conteúdo local",
   objective: "Gerar pacote semanal de conteúdo para validar o MVP",
@@ -55,8 +63,17 @@ const initialForm = {
     "Cliente quer explicar automação e IA de forma prática, humana e sem promessas exageradas.",
 };
 
+const initialBrandProfile: BrandProfileForm = {
+  tone: "",
+  audience: "",
+  promise: "",
+  restrictionsText: "",
+  sampleContent: "",
+};
+
 export function CortexJobConsole() {
   const [form, setForm] = useState(initialForm);
+  const [brandProfile, setBrandProfile] = useState(initialBrandProfile);
   const [login, setLogin] = useState({ email: "", password: "" });
   const [auth, setAuth] = useState<AuthState>({ authenticated: false });
   const [payload, setPayload] = useState<JobsPayload | null>(null);
@@ -72,6 +89,24 @@ export function CortexJobConsole() {
     const data = (await response.json()) as JobsPayload;
     setPayload(data);
     setStatus("Dados reais sincronizados com o banco.");
+  }, []);
+
+  const loadBrandProfile = useCallback(async () => {
+    const response = await fetch("/api/brand-profile", { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Falha ao carregar voz da marca: ${response.status}`);
+    }
+    const data = await response.json();
+    const profile = data.profile;
+    if (profile) {
+      setBrandProfile({
+        tone: profile.tone ?? "",
+        audience: profile.audience ?? "",
+        promise: profile.promise ?? "",
+        restrictionsText: (profile.restrictions ?? []).join("\n"),
+        sampleContent: profile.sampleContent ?? "",
+      });
+    }
   }, []);
 
   const loadSessionAndJobs = useCallback(async () => {
@@ -90,8 +125,8 @@ export function CortexJobConsole() {
 
     const session = await me.json();
     setAuth({ authenticated: true, email: session.user.email, tenantId: session.tenantId });
-    await loadJobs();
-  }, [loadJobs]);
+    await Promise.all([loadBrandProfile(), loadJobs()]);
+  }, [loadBrandProfile, loadJobs]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -134,6 +169,38 @@ export function CortexJobConsole() {
     setAuth({ authenticated: false });
     setPayload(null);
     setStatus("Sessão encerrada.");
+  }
+
+  async function handleBrandProfileSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("Salvando voz da marca...");
+
+    try {
+      const response = await fetch("/api/brand-profile", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tone: brandProfile.tone,
+          audience: brandProfile.audience,
+          promise: brandProfile.promise,
+          restrictions: brandProfile.restrictionsText
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          sampleContent: brandProfile.sampleContent,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error ?? `Falha ao salvar voz da marca: ${response.status}`);
+      }
+
+      await loadBrandProfile();
+      setStatus("Voz da marca salva no tenant real.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao salvar voz da marca.");
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -270,6 +337,63 @@ export function CortexJobConsole() {
               disabled={isSubmitting}
             >
               {isSubmitting ? "Executando..." : "Executar pacote agora"}
+            </button>
+          </form>
+
+          <form className="space-y-4 rounded-2xl border border-white/10 bg-[#0C1A2E] p-5" onSubmit={handleBrandProfileSubmit}>
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#2487D8]">Voz da marca</p>
+              <h4 className="mt-2 text-xl font-black">Perfil usado no prompt real</h4>
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Tom da marca</span>
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={brandProfile.tone}
+                onChange={(event) => setBrandProfile({ ...brandProfile, tone: event.target.value })}
+                minLength={3}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Público</span>
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={brandProfile.audience}
+                onChange={(event) => setBrandProfile({ ...brandProfile, audience: event.target.value })}
+                minLength={3}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Promessa</span>
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={brandProfile.promise}
+                onChange={(event) => setBrandProfile({ ...brandProfile, promise: event.target.value })}
+                minLength={3}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Restrições</span>
+              <textarea
+                className="min-h-24 w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={brandProfile.restrictionsText}
+                onChange={(event) => setBrandProfile({ ...brandProfile, restrictionsText: event.target.value })}
+                placeholder="Uma restrição por linha"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Exemplo aprovado</span>
+              <textarea
+                className="min-h-24 w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                value={brandProfile.sampleContent}
+                onChange={(event) => setBrandProfile({ ...brandProfile, sampleContent: event.target.value })}
+              />
+            </label>
+            <button className="w-full rounded-full border border-[#F5A623]/40 px-6 py-3 font-bold text-[#F5A623] transition hover:bg-[#F5A623] hover:text-[#071120]" type="submit">
+              Salvar voz da marca
             </button>
           </form>
 

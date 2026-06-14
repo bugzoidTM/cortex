@@ -17,7 +17,7 @@
 - [x] Escolher ORM: Prisma ou Drizzle.
 - [x] Implementar autenticação.
 - [x] Implementar organizações/tenants.
-- [ ] Implementar perfis de marca.
+- [x] Implementar perfis de marca.
 - [x] Implementar briefings.
 - [ ] Implementar jobs assíncronos.
 - [ ] Implementar worker.
@@ -68,7 +68,7 @@
 5. [x] Ligar banco e fluxo de dados real após consolidar modelo do MVP.
 6. [x] Implementar autenticação e tenants reais.
 7. [ ] Configurar LLM real via Docker secret.
-8. [ ] Implementar perfis de marca editáveis.
+8. [x] Implementar perfis de marca editáveis.
 9. [ ] Converter jobs para fila/worker.
 
 ## Critério de corte

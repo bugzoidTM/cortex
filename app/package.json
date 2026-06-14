@@ -13,6 +13,7 @@
     "test:llm-gateway": "node scripts/test-llm-gateway.mjs",
     "test:runtime-config": "node scripts/test-runtime-config.mjs",
     "test:auth-tenancy": "node scripts/test-auth-tenancy-contract.mjs",
+    "test:brand-profile": "node scripts/test-brand-profile-contract.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy"
   },
