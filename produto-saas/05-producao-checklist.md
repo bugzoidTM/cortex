@@ -23,11 +23,12 @@ Atualizado em: 2026-06-14
 ### P0 — Obrigatório antes de vender/abrir beta
 
 1. Configurar LLM real em produção
-   - Criar Docker secret para `OPENAI_COMPATIBLE_API_KEY`.
-   - Definir `OPENAI_COMPATIBLE_BASE_URL`.
-   - Definir modelo e custos por 1M tokens.
-   - Validar `GET /api/runtime` com `llm.configured=true`.
-   - Criar job real e confirmar ledger com provider/model reais.
+   - Status: implementado via Docker secret `cortex_openai_compatible_api_key`.
+   - Provider OpenAI-compatible: `closeai`.
+   - Base URL: `https://closeai.nutef.com/v1`.
+   - Modelo: `qwen3.7-max`.
+   - `GET /api/runtime` validado com `llm.configured=true`, `apiKeySource=file` e sem exposição de segredo.
+   - Validação de criação de job real ficou pendente porque a execução de bootstrap/login de usuário de verificação foi bloqueada pela camada de segurança do terminal.
 
 2. Autenticação e sessão
    - Status: implementado para beta inicial.
@@ -93,7 +94,6 @@ Atualizado em: 2026-06-14
 
 ## Próxima sequência recomendada
 
-1. Configurar LLM real via Docker secret e validar `llm.configured=true`.
-2. Converter jobs para fila/worker.
-3. Adicionar rate limit em `POST /api/jobs`.
-4. Implementar backup PostgreSQL diário e teste de restore.
+1. Converter `POST /api/jobs` síncrono para fila/worker.
+2. Adicionar rate limit em `POST /api/jobs`.
+3. Implementar backup PostgreSQL diário e teste de restore.
