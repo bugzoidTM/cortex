@@ -1,7 +1,7 @@
 /**
  * Verificação ponta a ponta do LLM real.
  *
- * Cria um job de conteúdo e processa pela mesma cadeia do worker.
+ * Cria um job de conteúdo e aguarda o worker de produção processar.
  * FALHA (exit 1) se cair no fallback determinístico (provider=internal-mvp)
  * ou se o job não concluir — garantindo que o provider real está respondendo.
  *
@@ -11,12 +11,15 @@
  *   npm run verify:llm-e2e
  */
 import { prisma } from "../src/lib/prisma";
-import { createContentPackageJob, ensureDemoTenant } from "../src/lib/cortex-mvp";
+import { enqueueContentPackageJob, ensureDemoTenant } from "../src/lib/cortex-mvp";
+
+const timeoutMs = Number(process.env.VERIFY_LLM_E2E_TIMEOUT_MS ?? "300000");
+const pollIntervalMs = 2500;
 
 async function main() {
   const tenant = await ensureDemoTenant();
 
-  const result = await createContentPackageJob(
+  const result = await enqueueContentPackageJob(
     {
       title: "Verificação E2E do LLM",
       objective: "Confirmar que a geração real está concluindo em produção",
@@ -27,9 +30,10 @@ async function main() {
     tenant.id,
   );
 
-  const ledger = result.ledger;
+  const processed = await waitForProcessedJob(result.job.id);
+  const ledger = processed.usageLedger[0];
   const report = {
-    jobStatus: result.job.status,
+    jobStatus: processed.status,
     provider: ledger?.provider ?? null,
     model: ledger?.model ?? null,
     inputTokens: ledger?.inputTokens ?? 0,
@@ -58,6 +62,25 @@ async function main() {
   }
 
   console.log(`OK: geração real concluída via provider "${report.provider}" (modelo ${report.model}).`);
+}
+
+async function waitForProcessedJob(jobId: string) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const job = await prisma.skillJob.findUniqueOrThrow({
+      where: { id: jobId },
+      include: { usageLedger: { orderBy: { createdAt: "desc" }, take: 1 } },
+    });
+
+    if (["COMPLETED", "FAILED"].includes(job.status) && job.usageLedger.length > 0) {
+      return job;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new Error(`verify_llm_e2e_timeout_after_${timeoutMs}ms`);
 }
 
 main()
