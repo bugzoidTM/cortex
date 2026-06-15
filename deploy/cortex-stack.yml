@@ -34,7 +34,7 @@ services:
       - cortex_byok_encryption_secret
       - cortex_woovi_app_id
       - cortex_woovi_webhook_secret
-      - cortex_smtp_password
+      - cortex_smtp_password_v2
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
@@ -44,11 +44,11 @@ services:
       CORTEX_BYOK_ENCRYPTION_SECRET_FILE: "/run/secrets/cortex_byok_encryption_secret"
       WOOVI_APP_ID_FILE: "/run/secrets/cortex_woovi_app_id"
       CORTEX_WOOVI_WEBHOOK_SECRET_FILE: "/run/secrets/cortex_woovi_webhook_secret"
-      SMTP_PASSWORD_FILE: "/run/secrets/cortex_smtp_password"
-      SMTP_HOST: "mail.nutef.com"
-      SMTP_PORT: "465"
-      SMTP_SECURE: "true"
-      SMTP_USER: "cortex@nutef.com"
+      SMTP_PASSWORD_FILE: "/run/secrets/cortex_smtp_password_v2"
+      SMTP_HOST: "smtp-relay.brevo.com"
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: "aed8b3001@smtp-brevo.com"
       SMTP_FROM: "Cortex <cortex@nutef.com>"
       WOOVI_API_BASE_URL: "https://api.woovi.com"
       CORTEX_PUBLIC_URL: "https://cortex.nutef.com"
@@ -84,7 +84,7 @@ services:
       - cortex_byok_encryption_secret
       - cortex_woovi_app_id
       - cortex_woovi_webhook_secret
-      - cortex_smtp_password
+      - cortex_smtp_password_v2
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
@@ -92,11 +92,11 @@ services:
       CORTEX_BYOK_ENCRYPTION_SECRET_FILE: "/run/secrets/cortex_byok_encryption_secret"
       WOOVI_APP_ID_FILE: "/run/secrets/cortex_woovi_app_id"
       CORTEX_WOOVI_WEBHOOK_SECRET_FILE: "/run/secrets/cortex_woovi_webhook_secret"
-      SMTP_PASSWORD_FILE: "/run/secrets/cortex_smtp_password"
-      SMTP_HOST: "mail.nutef.com"
-      SMTP_PORT: "465"
-      SMTP_SECURE: "true"
-      SMTP_USER: "cortex@nutef.com"
+      SMTP_PASSWORD_FILE: "/run/secrets/cortex_smtp_password_v2"
+      SMTP_HOST: "smtp-relay.brevo.com"
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: "aed8b3001@smtp-brevo.com"
       SMTP_FROM: "Cortex <cortex@nutef.com>"
       WOOVI_API_BASE_URL: "https://api.woovi.com"
       CORTEX_PUBLIC_URL: "https://cortex.nutef.com"
@@ -144,7 +144,7 @@ secrets:
     external: true
   cortex_woovi_webhook_secret:
     external: true
-  cortex_smtp_password:
+  cortex_smtp_password_v2:
     external: true
 
 volumes:
