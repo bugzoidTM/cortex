@@ -30,7 +30,7 @@ assert.match(route, /402/, "Quota excedida deve retornar HTTP 402");
 assert.match(route, /quotaStatus/, "GET/POST /api/jobs deve devolver quotaStatus");
 
 const gateway = readFileSync(gatewayPath, "utf8");
-assert.match(gateway, /OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS/, "Gateway deve suportar limite configurável de tokens por execução");
+assert.match(gateway, /maxOutputTokens/, "Gateway deve suportar limite configurável de tokens por execução via ModelConfig");
 assert.match(gateway, /max_tokens/, "Gateway deve enviar max_tokens ao provider OpenAI-compatible");
 
 const ui = readFileSync(uiPath, "utf8");

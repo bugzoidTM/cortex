@@ -24,6 +24,21 @@ export const createUserSchema = z.object({
   role: z.string().min(2).max(40).default("owner"),
 });
 
+export const upsertModelConfigSchema = z.object({
+  id: z.string().min(1).optional(),
+  tenantId: z.string().min(1).nullable().optional(),
+  name: z.string().min(2).max(120).default("default"),
+  provider: z.string().min(2).max(80),
+  baseUrl: z.string().url(),
+  model: z.string().min(2).max(120),
+  inputCostPer1M: z.coerce.number().min(0).max(1000).default(0),
+  outputCostPer1M: z.coerce.number().min(0).max(1000).default(0),
+  maxOutputTokens: z.coerce.number().int().min(256).max(8000).default(1800),
+  timeoutMs: z.coerce.number().int().min(1000).max(300000).default(180000),
+  enabled: z.coerce.boolean().default(true),
+  isDefault: z.coerce.boolean().default(true),
+});
+
 export const PRODUCTION_READINESS_ITEMS = [
   {
     status: "done",
@@ -78,7 +93,7 @@ export const PRODUCTION_READINESS_ITEMS = [
 ] as const;
 
 export async function getAdminDashboard() {
-  const [tenantCount, userCount, jobCount, artifactCount, usage, jobsByStatus, tenants, recentJobs, runtimeTenants] = await Promise.all([
+  const [tenantCount, userCount, jobCount, artifactCount, usage, jobsByStatus, tenants, recentJobs, runtimeTenants, modelConfigs] = await Promise.all([
     prisma.tenant.count(),
     prisma.user.count(),
     prisma.skillJob.count(),
@@ -99,6 +114,7 @@ export async function getAdminDashboard() {
       include: { tenant: true, briefing: true, usageLedger: true },
     }),
     prisma.tenant.findMany({ select: { id: true, slug: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.lLMProviderConfig.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }], include: { tenant: true }, take: 50 }),
   ]);
 
   return {
@@ -142,6 +158,22 @@ export async function getAdminDashboard() {
       createdAt: job.createdAt,
     })),
     tenantOptions: runtimeTenants,
+    modelConfigs: modelConfigs.map((config) => ({
+      id: config.id,
+      tenantId: config.tenantId,
+      tenant: config.tenant?.slug ?? "global",
+      name: config.name,
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      inputCostPer1M: config.inputCostPer1M.toString(),
+      outputCostPer1M: config.outputCostPer1M.toString(),
+      maxOutputTokens: config.maxOutputTokens,
+      timeoutMs: config.timeoutMs,
+      enabled: config.enabled,
+      isDefault: config.isDefault,
+      updatedAt: config.updatedAt,
+    })),
     readiness: PRODUCTION_READINESS_ITEMS,
   };
 }
@@ -185,4 +217,25 @@ export async function createAdminUser(input: unknown) {
   });
 
   return { id: user.id, email: user.email, name: user.name };
+}
+
+export async function upsertAdminModelConfig(input: unknown) {
+  const parsed = upsertModelConfigSchema.parse(input);
+  const { id, ...data } = parsed;
+  const tenantId = data.tenantId ?? null;
+
+  return prisma.$transaction(async (tx) => {
+    if (data.isDefault) {
+      await tx.lLMProviderConfig.updateMany({
+        where: { tenantId, isDefault: true, ...(id ? { id: { not: id } } : {}) },
+        data: { isDefault: false },
+      });
+    }
+
+    if (id) {
+      return tx.lLMProviderConfig.update({ where: { id }, data: { ...data, tenantId } });
+    }
+
+    return tx.lLMProviderConfig.create({ data: { ...data, tenantId } });
+  });
 }

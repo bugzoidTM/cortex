@@ -220,7 +220,7 @@ export async function processContentPackageJob(jobId: string) {
   const parsed = createJobInputSchema.parse(job.input);
 
   try {
-    const generation = await generateContentPackageArtifact(parsed, job.tenant.brandProfile);
+    const generation = await generateContentPackageArtifact(parsed, job.tenant.brandProfile, job.tenantId);
 
     return prisma.$transaction(async (tx) => {
       const updatedJob = await tx.skillJob.update({
@@ -254,8 +254,11 @@ export async function processContentPackageJob(jobId: string) {
           jobId: job.id,
           provider: generation.provider,
           model: generation.model,
+          llmProviderConfigId: generation.llmProviderConfigId,
           inputTokens: generation.inputTokens,
           outputTokens: generation.outputTokens,
+          inputCostPer1M: generation.inputCostPer1M,
+          outputCostPer1M: generation.outputCostPer1M,
           costUsd: generation.costUsd,
           latencyMs: generation.latencyMs,
           status: generation.status,

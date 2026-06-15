@@ -1,4 +1,4 @@
-import { getLlmRuntimeStatus } from "@/lib/runtime-config";
+import { getLlmRuntimeStatus } from "@/lib/llm-provider-config";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET() {
         status: "ok",
         latencyMs: Date.now() - startedAt,
       },
-      llm: getLlmRuntimeStatus(),
+      llm: await getLlmRuntimeStatus(),
     });
   } catch (error) {
     return Response.json(
@@ -25,7 +25,7 @@ export async function GET() {
           status: "error",
           latencyMs: Date.now() - startedAt,
         },
-        llm: getLlmRuntimeStatus(),
+        llm: await getLlmRuntimeStatus(),
         error: error instanceof Error ? error.message : "unknown_error",
       },
       { status: 500 },

@@ -13,6 +13,21 @@ type TenantRow = TenantOption & {
   artifacts: number;
   members: number;
 };
+type ModelConfigRow = {
+  id: string;
+  tenantId: string | null;
+  tenant: string;
+  name: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  inputCostPer1M: string;
+  outputCostPer1M: string;
+  maxOutputTokens: number;
+  timeoutMs: number;
+  enabled: boolean;
+  isDefault: boolean;
+};
 type AdminPayload = {
   ok: boolean;
   superuser?: { email: string };
@@ -27,6 +42,7 @@ type AdminPayload = {
     jobsByStatus: Array<{ status: string; count: number }>;
   };
   tenants: TenantRow[];
+  modelConfigs: ModelConfigRow[];
   tenantOptions: TenantOption[];
   recentJobs: Array<{
     id: string;
@@ -43,12 +59,27 @@ type AdminPayload = {
 
 const initialTenant = { slug: "", name: "", plan: "beta", monthlyQuota: "1000000" };
 const initialUser = { tenantId: "", email: "", name: "", password: "", role: "owner" };
+const initialModelConfig = {
+  id: "",
+  tenantId: "",
+  name: "CloseAI Qwen 3.7 Max",
+  provider: "closeai",
+  baseUrl: "https://closeai.nutef.com/v1",
+  model: "qwen3.7-max",
+  inputCostPer1M: "1.00",
+  outputCostPer1M: "4.00",
+  maxOutputTokens: "1800",
+  timeoutMs: "180000",
+  enabled: true,
+  isDefault: true,
+};
 
 export function AdminPanel() {
   const [data, setData] = useState<AdminPayload | null>(null);
   const [status, setStatus] = useState("Carregando painel administrativo...");
   const [tenantForm, setTenantForm] = useState(initialTenant);
   const [userForm, setUserForm] = useState(initialUser);
+  const [modelForm, setModelForm] = useState(initialModelConfig);
   const [editingQuota, setEditingQuota] = useState<Record<string, string>>({});
 
   async function loadAdmin() {
@@ -57,8 +88,26 @@ export function AdminPanel() {
     if (response.status === 403) throw new Error("superuser_required: seu usuário não está em CORTEX_SUPERUSER_EMAILS.");
     if (!response.ok) throw new Error(`Falha ao carregar admin: ${response.status}`);
     const payload = (await response.json()) as AdminPayload;
+    const defaultModel = payload.modelConfigs.find((config) => config.isDefault) ?? payload.modelConfigs[0];
+
     setData(payload);
     setUserForm((current) => ({ ...current, tenantId: current.tenantId || payload.tenantOptions[0]?.id || "" }));
+    if (defaultModel) {
+      setModelForm({
+        id: defaultModel.id,
+        tenantId: defaultModel.tenantId ?? "",
+        name: defaultModel.name,
+        provider: defaultModel.provider,
+        baseUrl: defaultModel.baseUrl,
+        model: defaultModel.model,
+        inputCostPer1M: defaultModel.inputCostPer1M,
+        outputCostPer1M: defaultModel.outputCostPer1M,
+        maxOutputTokens: String(defaultModel.maxOutputTokens),
+        timeoutMs: String(defaultModel.timeoutMs),
+        enabled: defaultModel.enabled,
+        isDefault: defaultModel.isDefault,
+      });
+    }
     setStatus("Painel sincronizado com produção.");
   }
 
@@ -102,6 +151,24 @@ export function AdminPanel() {
       setStatus("Usuário criado/vinculado ao tenant.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao criar usuário.");
+    }
+  }
+
+  async function handleModelConfig(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      await runAction("upsert_model_config", {
+        ...modelForm,
+        id: modelForm.id || undefined,
+        tenantId: modelForm.tenantId || null,
+        inputCostPer1M: Number(modelForm.inputCostPer1M),
+        outputCostPer1M: Number(modelForm.outputCostPer1M),
+        maxOutputTokens: Number(modelForm.maxOutputTokens),
+        timeoutMs: Number(modelForm.timeoutMs),
+      });
+      setStatus("Configuração de modelo salva para o worker.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao salvar modelo.");
     }
   }
 
@@ -165,6 +232,39 @@ export function AdminPanel() {
         </form>
       </section>
 
+      <section className="rounded-3xl border border-[#2487D8]/20 bg-[#0C1A2E] p-5">
+        <h3 className="text-xl font-black">Modelo padrão</h3>
+        <p className="mt-2 text-sm text-[#D6D3C4]">Configuração usada pelo worker para novas gerações. A chave de API continua em Docker secret; modelo, endpoint, timeout e preço ficam no banco.</p>
+        <form className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4" onSubmit={handleModelConfig}>
+          <Input label="Nome" value={modelForm.name} onChange={(value) => setModelForm({ ...modelForm, name: value })} required />
+          <Input label="Provider" value={modelForm.provider} onChange={(value) => setModelForm({ ...modelForm, provider: value })} required />
+          <Input label="Base URL" value={modelForm.baseUrl} onChange={(value) => setModelForm({ ...modelForm, baseUrl: value })} required />
+          <Input label="Modelo" value={modelForm.model} onChange={(value) => setModelForm({ ...modelForm, model: value })} required />
+          <Input label="Custo entrada / 1M" value={modelForm.inputCostPer1M} onChange={(value) => setModelForm({ ...modelForm, inputCostPer1M: value })} type="number" required />
+          <Input label="Custo saída / 1M" value={modelForm.outputCostPer1M} onChange={(value) => setModelForm({ ...modelForm, outputCostPer1M: value })} type="number" required />
+          <Input label="Max output tokens" value={modelForm.maxOutputTokens} onChange={(value) => setModelForm({ ...modelForm, maxOutputTokens: value })} type="number" required />
+          <Input label="Timeout ms" value={modelForm.timeoutMs} onChange={(value) => setModelForm({ ...modelForm, timeoutMs: value })} type="number" required />
+          <label className="block text-sm font-bold text-[#D6D3C4]">
+            Escopo
+            <select className="mt-2 w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]" value={modelForm.tenantId} onChange={(event) => setModelForm({ ...modelForm, tenantId: event.target.value })}>
+              <option value="">Global</option>
+              {data.tenantOptions.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name} ({tenant.slug})</option>)}
+            </select>
+          </label>
+          <label className="mt-8 flex items-center gap-2 text-sm font-bold text-[#D6D3C4]"><input checked={modelForm.enabled} onChange={(event) => setModelForm({ ...modelForm, enabled: event.target.checked })} type="checkbox" /> Habilitado</label>
+          <label className="mt-8 flex items-center gap-2 text-sm font-bold text-[#D6D3C4]"><input checked={modelForm.isDefault} onChange={(event) => setModelForm({ ...modelForm, isDefault: event.target.checked })} type="checkbox" /> Padrão</label>
+          <button className="mt-6 rounded-full bg-[#F5A623] px-5 py-3 font-black text-[#071120]" type="submit">Salvar modelo</button>
+        </form>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {data.modelConfigs.map((config) => (
+            <button className="rounded-2xl border border-white/10 bg-[#071120] p-4 text-left" key={config.id} type="button" onClick={() => setModelForm({ id: config.id, tenantId: config.tenantId ?? "", name: config.name, provider: config.provider, baseUrl: config.baseUrl, model: config.model, inputCostPer1M: config.inputCostPer1M, outputCostPer1M: config.outputCostPer1M, maxOutputTokens: String(config.maxOutputTokens), timeoutMs: String(config.timeoutMs), enabled: config.enabled, isDefault: config.isDefault })}>
+              <div className="flex justify-between gap-3"><b>{config.name}</b><span className="text-[#F5A623]">{config.isDefault ? "padrão" : config.enabled ? "ativo" : "inativo"}</span></div>
+              <p className="mt-1 text-sm text-[#D6D3C4]">{config.tenant} · {config.provider} · {config.model} · ${config.inputCostPer1M}/${config.outputCostPer1M} por 1M · {config.timeoutMs} ms</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="rounded-3xl border border-white/10 bg-[#0C1A2E] p-5">
         <h3 className="text-xl font-black">Tenants e quota mensal</h3>
         <div className="mt-4 overflow-x-auto">
@@ -224,5 +324,5 @@ function Metric({ label, value }: { label: string; value: string | number }) {
 }
 
 function Input({ label, value, onChange, type = "text", required = false, placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string }) {
-  return <label className="block text-sm font-bold text-[#D6D3C4]">{label}<input className="mt-2 w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]" type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} /></label>;
+  return <label className="block text-sm font-bold text-[#D6D3C4]">{label}<input className="mt-2 w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]" type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} step="any" /></label>;
 }

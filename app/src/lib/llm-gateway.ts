@@ -1,3 +1,4 @@
+import { getActiveLlmProviderConfig } from "./llm-provider-config";
 import { readSecretEnv } from "./runtime-config";
 import type { CreateJobInput } from "./cortex-mvp";
 
@@ -13,8 +14,11 @@ type GatewayResult = {
   summary: string;
   provider: string;
   model: string;
+  llmProviderConfigId: string | null;
   inputTokens: number;
   outputTokens: number;
+  inputCostPer1M: string;
+  outputCostPer1M: string;
   costUsd: string;
   latencyMs: number;
   status: "completed" | "fallback";
@@ -31,33 +35,35 @@ type OpenAICompatibleResponse = {
 
 const DEFAULT_MODEL = "deterministic-template-v1";
 
-export async function generateContentPackageArtifact(input: CreateJobInput, brand?: BrandContext | null): Promise<GatewayResult> {
+export async function generateContentPackageArtifact(
+  input: CreateJobInput,
+  brand?: BrandContext | null,
+  tenantId?: string | null,
+): Promise<GatewayResult> {
   const startedAt = Date.now();
   const apiKey = readSecretEnv("OPENAI_COMPATIBLE_API_KEY");
-  const baseUrl = process.env.OPENAI_COMPATIBLE_BASE_URL;
-  const model = process.env.OPENAI_COMPATIBLE_MODEL ?? "gpt-4o-mini";
-  const provider = process.env.OPENAI_COMPATIBLE_PROVIDER ?? "openai-compatible";
+  const config = await getActiveLlmProviderConfig(tenantId);
 
-  if (!apiKey || !baseUrl) {
+  if (!apiKey || !config?.baseUrl) {
     return deterministicFallback(input, brand, Date.now() - startedAt, "missing_openai_compatible_config");
   }
 
   const messages = buildMessages(input, brand);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), getTimeoutMs());
+  const timeout = setTimeout(() => controller.abort(), getTimeoutMs(config.timeoutMs));
 
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model,
+        model: config.model,
         temperature: 0.7,
-        max_tokens: getMaxOutputTokens(),
+        max_tokens: getMaxOutputTokens(config.maxOutputTokens),
         messages,
       }),
       signal: controller.signal,
@@ -80,11 +86,14 @@ export async function generateContentPackageArtifact(input: CreateJobInput, bran
     return {
       content,
       summary: "Pacote gerado via LLM Gateway OpenAI-compatible.",
-      provider,
-      model,
+      provider: config.provider,
+      model: config.model,
+      llmProviderConfigId: config.id,
       inputTokens: promptTokens,
       outputTokens: completionTokens,
-      costUsd: estimateCostUsd(promptTokens, completionTokens),
+      inputCostPer1M: config.inputCostPer1M,
+      outputCostPer1M: config.outputCostPer1M,
+      costUsd: estimateCostUsd(promptTokens, completionTokens, config.inputCostPer1M, config.outputCostPer1M),
       latencyMs: Date.now() - startedAt,
       status: "completed",
     };
@@ -96,8 +105,7 @@ export async function generateContentPackageArtifact(input: CreateJobInput, bran
   }
 }
 
-function getTimeoutMs() {
-  const configured = Number(process.env.OPENAI_COMPATIBLE_TIMEOUT_MS ?? "60000");
+function getTimeoutMs(configured: number) {
   if (!Number.isFinite(configured) || configured < 1000) {
     return 60000;
   }
@@ -184,16 +192,18 @@ function deterministicFallback(input: CreateJobInput, brand: BrandContext | null
     summary: `Pacote gerado por fallback determinístico do LLM Gateway (${reason}).`,
     provider: "internal-mvp",
     model: DEFAULT_MODEL,
+    llmProviderConfigId: null,
     inputTokens: estimateTokens(JSON.stringify(input)),
     outputTokens: estimateTokens(content),
+    inputCostPer1M: "0",
+    outputCostPer1M: "0",
     costUsd: "0",
     latencyMs,
     status: "fallback",
   };
 }
 
-function getMaxOutputTokens() {
-  const configured = Number(process.env.OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS ?? "1800");
+function getMaxOutputTokens(configured: number) {
   if (!Number.isFinite(configured) || configured < 256) {
     return 1800;
   }
@@ -204,9 +214,9 @@ function estimateTokens(text: string) {
   return Math.max(1, Math.ceil(text.length / 4));
 }
 
-function estimateCostUsd(inputTokens: number, outputTokens: number) {
-  const inputPerMillion = Number(process.env.OPENAI_COMPATIBLE_INPUT_COST_PER_1M ?? "0");
-  const outputPerMillion = Number(process.env.OPENAI_COMPATIBLE_OUTPUT_COST_PER_1M ?? "0");
+function estimateCostUsd(inputTokens: number, outputTokens: number, inputCostPer1M: string, outputCostPer1M: string) {
+  const inputPerMillion = Number(inputCostPer1M || "0");
+  const outputPerMillion = Number(outputCostPer1M || "0");
   const cost = (inputTokens / 1_000_000) * inputPerMillion + (outputTokens / 1_000_000) * outputPerMillion;
   return cost.toFixed(6);
 }

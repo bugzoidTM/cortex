@@ -36,16 +36,7 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      OPENAI_COMPATIBLE_PROVIDER: "closeai"
-      OPENAI_COMPATIBLE_BASE_URL: "https://closeai.nutef.com/v1"
       OPENAI_COMPATIBLE_API_KEY_FILE: "/run/secrets/cortex_openai_compatible_api_key"
-      OPENAI_COMPATIBLE_MODEL: "qwen3.7-max"
-      OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS: "1800"
-      OPENAI_COMPATIBLE_TIMEOUT_MS: "180000"
-      # AJUSTAR: preco real do qwen3.7-max no closeai (USD por 1M tokens).
-      # Sem estes valores o custo gravado no ledger fica 0 e a protecao de margem nao funciona.
-      OPENAI_COMPATIBLE_INPUT_COST_PER_1M: "1.00"
-      OPENAI_COMPATIBLE_OUTPUT_COST_PER_1M: "4.00"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_SUPERUSER_EMAILS: "admin@nutef.com"
     healthcheck:
@@ -78,16 +69,7 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
-      OPENAI_COMPATIBLE_PROVIDER: "closeai"
-      OPENAI_COMPATIBLE_BASE_URL: "https://closeai.nutef.com/v1"
       OPENAI_COMPATIBLE_API_KEY_FILE: "/run/secrets/cortex_openai_compatible_api_key"
-      OPENAI_COMPATIBLE_MODEL: "qwen3.7-max"
-      OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS: "1800"
-      OPENAI_COMPATIBLE_TIMEOUT_MS: "180000"
-      # AJUSTAR: preco real do qwen3.7-max no closeai (USD por 1M tokens).
-      # Sem estes valores o custo gravado no ledger fica 0 e a protecao de margem nao funciona.
-      OPENAI_COMPATIBLE_INPUT_COST_PER_1M: "1.00"
-      OPENAI_COMPATIBLE_OUTPUT_COST_PER_1M: "4.00"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_WORKER_POLL_INTERVAL_MS: "5000"
       # Opcional: webhook (Slack/Discord/etc.) para alerta de job falho e erro do worker.

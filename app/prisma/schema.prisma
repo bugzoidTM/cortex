@@ -8,20 +8,44 @@ datasource db {
 }
 
 model Tenant {
-  id           String           @id @default(cuid())
-  slug         String           @unique
+  id           String   @id @default(cuid())
+  slug         String   @unique
   name         String
-  plan         String           @default("beta")
-  monthlyQuota Int              @default(1000000)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  plan         String   @default("beta")
+  monthlyQuota Int      @default(1000000)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  brandProfile BrandProfile?
-  briefings    Briefing[]
-  jobs         SkillJob[]
-  artifacts    Artifact[]
-  usageLedger  LLMUsageLedger[]
-  memberships  TenantMembership[]
+  brandProfile       BrandProfile?
+  briefings          Briefing[]
+  jobs               SkillJob[]
+  artifacts          Artifact[]
+  usageLedger        LLMUsageLedger[]
+  memberships        TenantMembership[]
+  llmProviderConfigs LLMProviderConfig[]
+}
+
+model LLMProviderConfig {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String   @default("default")
+  provider        String
+  baseUrl         String
+  model           String
+  inputCostPer1M  Decimal  @default(0) @db.Decimal(10, 4)
+  outputCostPer1M Decimal  @default(0) @db.Decimal(10, 4)
+  maxOutputTokens Int      @default(1800)
+  timeoutMs       Int      @default(180000)
+  enabled         Boolean  @default(true)
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant      Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usageLedger LLMUsageLedger[]
+
+  @@index([enabled, isDefault])
+  @@index([tenantId, enabled, isDefault])
 }
 
 model User {
@@ -33,7 +57,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   memberships TenantMembership[]
-  sessions     Session[]
+  sessions    Session[]
 }
 
 model TenantMembership {
@@ -133,22 +157,27 @@ model Artifact {
 }
 
 model LLMUsageLedger {
-  id           String   @id @default(cuid())
-  tenantId     String
-  jobId        String?
-  provider     String
-  model        String
-  inputTokens  Int      @default(0)
-  outputTokens Int      @default(0)
-  costUsd      Decimal  @default(0) @db.Decimal(10, 6)
-  latencyMs    Int      @default(0)
-  status       String
-  createdAt    DateTime @default(now())
+  id                  String   @id @default(cuid())
+  tenantId            String
+  jobId               String?
+  provider            String
+  model               String
+  llmProviderConfigId String?
+  inputTokens         Int      @default(0)
+  outputTokens        Int      @default(0)
+  inputCostPer1M      Decimal  @default(0) @db.Decimal(10, 4)
+  outputCostPer1M     Decimal  @default(0) @db.Decimal(10, 4)
+  costUsd             Decimal  @default(0) @db.Decimal(10, 6)
+  latencyMs           Int      @default(0)
+  status              String
+  createdAt           DateTime @default(now())
 
-  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  job    SkillJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job               SkillJob?          @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  llmProviderConfig LLMProviderConfig? @relation(fields: [llmProviderConfigId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
+  @@index([llmProviderConfigId])
 }
 
 model RateLimitEvent {
