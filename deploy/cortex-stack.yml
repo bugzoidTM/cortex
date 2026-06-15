@@ -31,12 +31,14 @@ services:
     secrets:
       - cortex_postgres_password
       - cortex_openai_compatible_api_key
+      - cortex_byok_encryption_secret
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       OPENAI_COMPATIBLE_API_KEY_FILE: "/run/secrets/cortex_openai_compatible_api_key"
+      CORTEX_BYOK_ENCRYPTION_SECRET_FILE: "/run/secrets/cortex_byok_encryption_secret"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_SUPERUSER_EMAILS: "admin@nutef.com"
     healthcheck:
@@ -66,10 +68,12 @@ services:
     secrets:
       - cortex_postgres_password
       - cortex_openai_compatible_api_key
+      - cortex_byok_encryption_secret
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
       OPENAI_COMPATIBLE_API_KEY_FILE: "/run/secrets/cortex_openai_compatible_api_key"
+      CORTEX_BYOK_ENCRYPTION_SECRET_FILE: "/run/secrets/cortex_byok_encryption_secret"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_WORKER_POLL_INTERVAL_MS: "5000"
       # Opcional: webhook (Slack/Discord/etc.) para alerta de job falho e erro do worker.
@@ -107,6 +111,8 @@ secrets:
   cortex_postgres_password:
     external: true
   cortex_openai_compatible_api_key:
+    external: true
+  cortex_byok_encryption_secret:
     external: true
 
 volumes:

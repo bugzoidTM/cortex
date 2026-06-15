@@ -1,5 +1,6 @@
 import { getActiveLlmProviderConfig } from "./llm-provider-config";
 import { readSecretEnv } from "./runtime-config";
+import { getActiveTenantLlmCredential } from "./tenant-llm-credential";
 import type { CreateJobInput } from "./cortex-mvp";
 
 type BrandContext = {
@@ -41,29 +42,55 @@ export async function generateContentPackageArtifact(
   tenantId?: string | null,
 ): Promise<GatewayResult> {
   const startedAt = Date.now();
-  const apiKey = readSecretEnv("OPENAI_COMPATIBLE_API_KEY");
+  const credential = await getActiveTenantLlmCredential(tenantId);
   const config = await getActiveLlmProviderConfig(tenantId);
+  const apiKey = credential?.apiKey ?? readSecretEnv("OPENAI_COMPATIBLE_API_KEY");
+  const runtime = credential?.trialActive
+    ? {
+        provider: credential.provider,
+        baseUrl: credential?.baseUrl,
+        model: credential.model,
+        maxOutputTokens: config?.maxOutputTokens ?? 1800,
+        timeoutMs: config?.timeoutMs ?? 180000,
+        inputCostPer1M: "0",
+        outputCostPer1M: "0",
+        llmProviderConfigId: null as string | null,
+        byokTrial: credential.byokTrial,
+      }
+    : config
+      ? {
+          provider: config.provider,
+          baseUrl: config.baseUrl,
+          model: config.model,
+          maxOutputTokens: config.maxOutputTokens,
+          timeoutMs: config.timeoutMs,
+          inputCostPer1M: config.inputCostPer1M,
+          outputCostPer1M: config.outputCostPer1M,
+          llmProviderConfigId: config.id,
+          byokTrial: false,
+        }
+      : null;
 
-  if (!apiKey || !config?.baseUrl) {
+  if (!apiKey || !runtime?.baseUrl) {
     return deterministicFallback(input, brand, Date.now() - startedAt, "missing_openai_compatible_config");
   }
 
   const messages = buildMessages(input, brand);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), getTimeoutMs(config.timeoutMs));
+  const timeout = setTimeout(() => controller.abort(), getTimeoutMs(runtime.timeoutMs));
 
   try {
-    const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const response = await fetch(`${runtime.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: config.model,
+        model: runtime.model,
         temperature: 0.7,
-        max_tokens: getMaxOutputTokens(config.maxOutputTokens),
+        max_tokens: getMaxOutputTokens(runtime.maxOutputTokens),
         messages,
       }),
       signal: controller.signal,
@@ -86,14 +113,14 @@ export async function generateContentPackageArtifact(
     return {
       content,
       summary: "Pacote gerado via LLM Gateway OpenAI-compatible.",
-      provider: config.provider,
-      model: config.model,
-      llmProviderConfigId: config.id,
+      provider: runtime.byokTrial ? `${runtime.provider}-byokTrial` : runtime.provider,
+      model: runtime.model,
+      llmProviderConfigId: runtime.llmProviderConfigId,
       inputTokens: promptTokens,
       outputTokens: completionTokens,
-      inputCostPer1M: config.inputCostPer1M,
-      outputCostPer1M: config.outputCostPer1M,
-      costUsd: estimateCostUsd(promptTokens, completionTokens, config.inputCostPer1M, config.outputCostPer1M),
+      inputCostPer1M: runtime.inputCostPer1M,
+      outputCostPer1M: runtime.outputCostPer1M,
+      costUsd: estimateCostUsd(promptTokens, completionTokens, runtime.inputCostPer1M, runtime.outputCostPer1M),
       latencyMs: Date.now() - startedAt,
       status: "completed",
     };

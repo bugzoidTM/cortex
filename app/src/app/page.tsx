@@ -28,8 +28,8 @@ const howItWorks = [
 const packageItems = ["Post para LinkedIn", "Roteiro curto", "Outline de carrossel", "Legendas", "E-mail/newsletter", "Notas de revisão"];
 
 const pricing = [
-  ["Acesso", "Por convite/aprovação", "O Cortex ainda opera com onboarding assistido para garantir configuração correta da marca."],
-  ["Cobrança", "Plano mensal + limite de uso", "Cada tenant tem quota mensal de tokens e limite por execução para previsibilidade de custo."],
+  ["Teste de 14 dias", "use sua própria chave API", "O usuário pode validar o Cortex com uma chave OpenAI-compatible própria; a chave fica criptografada, mascarada na tela e expira automaticamente ao fim do teste."],
+  ["Planos pagos", "LLM gerenciado pela Nutef", "Nos planos pagos, o tenant usa o modelo configurado no painel admin, com quota mensal, custo estimado e limites por execução."],
   ["Operação", "Admin Nutef", "Superadmin acompanha tenants, usuários, modelo LLM, consumo, jobs e custo estimado."],
 ];
 
@@ -144,7 +144,7 @@ export default function Home() {
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Acesso ao produto</p>
             <h2 className="mt-4 text-4xl font-black tracking-tight">Entre na sua conta ou solicite liberação para a sua marca.</h2>
             <p className="mt-5 leading-8 text-[#D6D3C4]">
-              O Cortex usa contas por tenant. Se você já recebeu acesso, faça login abaixo. Se ainda não tem conta, solicite onboarding para configurar marca, quota e usuários.
+              O Cortex usa contas por tenant. Se você já recebeu acesso, faça login abaixo. Se ainda não tem conta, solicite onboarding para configurar marca, quota e usuários. No teste de 14 dias, você pode usar sua própria chave API; nos planos pagos, o LLM gerenciado pela Nutef já vem configurado.
             </p>
             <div className="mt-8 rounded-[1.5rem] border border-[#F5A623]/20 bg-[#F5A623]/10 p-6 text-[#F9E6BC]">
               <h3 className="font-black">Acesso por convite</h3>

@@ -23,6 +23,27 @@ model Tenant {
   usageLedger        LLMUsageLedger[]
   memberships        TenantMembership[]
   llmProviderConfigs LLMProviderConfig[]
+  llmCredential      TenantLlmCredential?
+}
+
+model TenantLlmCredential {
+  id              String   @id @default(cuid())
+  tenantId        String
+  provider        String
+  baseUrl         String
+  model           String
+  encryptedApiKey String
+  apiKeyPreview   String
+  trialStartedAt  DateTime @default(now())
+  trialEndsAt     DateTime
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId])
+  @@index([enabled, trialEndsAt])
 }
 
 model LLMProviderConfig {

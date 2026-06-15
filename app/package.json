@@ -19,7 +19,8 @@
     "verify:llm-e2e": "tsx scripts/verify-llm-e2e.ts",
     "test:quota-guard": "node scripts/test-quota-guard-contract.mjs",
     "test:admin-panel": "node scripts/test-admin-panel-contract.mjs",
-    "test:production-hardening": "node scripts/test-production-hardening-contract.mjs"
+    "test:production-hardening": "node scripts/test-production-hardening-contract.mjs",
+    "test:byok-trial": "node scripts/test-byok-trial-contract.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1",

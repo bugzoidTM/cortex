@@ -47,8 +47,13 @@ export const PRODUCTION_READINESS_ITEMS = [
   },
   {
     status: "done",
+    title: "Trial BYOK 14 dias",
+    detail: "Usuário autenticado pode testar com sua própria chave API OpenAI-compatible; a chave é criptografada, mascarada e expira automaticamente em 14 dias.",
+  },
+  {
+    status: "done",
     title: "LLM real configurado",
-    detail: "Provider OpenAI-compatible via Docker secret file e /api/runtime sanitizado.",
+    detail: "Provider OpenAI-compatible via Docker secret file para planos pagos e /api/runtime sanitizado.",
   },
   {
     status: "done",

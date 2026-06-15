@@ -66,6 +66,25 @@ type BrandProfileForm = {
   sampleContent: string;
 };
 
+type LlmCredentialStatus = {
+  configured: boolean;
+  provider: string | null;
+  baseUrl: string | null;
+  model: string | null;
+  apiKeyPreview: string | null;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  trialActive: boolean;
+  enabled: boolean;
+};
+
+type LlmCredentialForm = {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+};
+
 const initialForm = {
   title: "Como usar IA para conteúdo local",
   objective: "Gerar pacote semanal de conteúdo para educar clientes e captar leads",
@@ -82,9 +101,18 @@ const initialBrandProfile: BrandProfileForm = {
   sampleContent: "",
 };
 
+const initialLlmCredential: LlmCredentialForm = {
+  provider: "openai-compatible",
+  baseUrl: "https://api.openai.com/v1",
+  model: "gpt-4o-mini",
+  apiKey: "",
+};
+
 export function CortexJobConsole() {
   const [form, setForm] = useState(initialForm);
   const [brandProfile, setBrandProfile] = useState(initialBrandProfile);
+  const [llmCredentialForm, setLlmCredentialForm] = useState(initialLlmCredential);
+  const [llmCredential, setLlmCredential] = useState<LlmCredentialStatus | null>(null);
   const [login, setLogin] = useState({ email: "", password: "" });
   const [auth, setAuth] = useState<AuthState>({ authenticated: false });
   const [payload, setPayload] = useState<JobsPayload | null>(null);
@@ -120,6 +148,25 @@ export function CortexJobConsole() {
     }
   }, []);
 
+  const loadLlmCredential = useCallback(async () => {
+    const response = await fetch("/api/llm-credential", { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Falha ao carregar chave LLM: ${response.status}`);
+    }
+    const data = await response.json();
+    const credential = data.credential as LlmCredentialStatus;
+    setLlmCredential(credential);
+    if (credential.configured) {
+      setLlmCredentialForm((current) => ({
+        ...current,
+        provider: credential.provider ?? current.provider,
+        baseUrl: credential.baseUrl ?? current.baseUrl,
+        model: credential.model ?? current.model,
+        apiKey: "",
+      }));
+    }
+  }, []);
+
   const loadSessionAndJobs = useCallback(async () => {
     const me = await fetch("/api/auth/me", { cache: "no-store" });
 
@@ -136,8 +183,8 @@ export function CortexJobConsole() {
 
     const session = await me.json();
     setAuth({ authenticated: true, email: session.user.email, tenantId: session.tenantId });
-    await Promise.all([loadBrandProfile(), loadJobs()]);
-  }, [loadBrandProfile, loadJobs]);
+    await Promise.all([loadBrandProfile(), loadLlmCredential(), loadJobs()]);
+  }, [loadBrandProfile, loadLlmCredential, loadJobs]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -211,6 +258,45 @@ export function CortexJobConsole() {
       setStatus("Voz da marca salva no tenant real.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao salvar voz da marca.");
+    }
+  }
+
+  async function handleLlmCredentialSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("Salvando sua própria chave API para o Teste de 14 dias...");
+
+    try {
+      const response = await fetch("/api/llm-credential", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(llmCredentialForm),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error ?? `Falha ao salvar chave LLM: ${response.status}`);
+      }
+
+      await loadLlmCredential();
+      setLlmCredentialForm((current) => ({ ...current, apiKey: "" }));
+      setStatus("Sua própria chave API foi salva. Teste de 14 dias ativo para este tenant.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao salvar chave LLM.");
+    }
+  }
+
+  async function handleDeleteLlmCredential() {
+    setStatus("Removendo chave API do tenant...");
+    try {
+      const response = await fetch("/api/llm-credential", { method: "DELETE" });
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error ?? `Falha ao remover chave LLM: ${response.status}`);
+      }
+      await loadLlmCredential();
+      setStatus("Chave API removida. O tenant volta ao LLM gerenciado quando aplicável.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao remover chave LLM.");
     }
   }
 
@@ -407,6 +493,41 @@ export function CortexJobConsole() {
             <button className="w-full rounded-full border border-[#F5A623]/40 px-6 py-3 font-bold text-[#F5A623] transition hover:bg-[#F5A623] hover:text-[#071120]" type="submit">
               Salvar voz da marca
             </button>
+          </form>
+
+          <form className="space-y-4 rounded-2xl border border-[#F5A623]/20 bg-[#0C1A2E] p-5" onSubmit={handleLlmCredentialSubmit}>
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#F5A623]">Teste de 14 dias</p>
+              <h4 className="mt-2 text-xl font-black">Sua própria chave API</h4>
+              <p className="mt-2 text-sm leading-6 text-[#D6D3C4]">
+                Use sua própria chave API OpenAI-compatible durante o teste. A chave é criptografada, nunca aparece novamente na tela e vence automaticamente em 14 dias.
+              </p>
+              {llmCredential?.configured && (
+                <p className="mt-3 rounded-2xl bg-[#071120] p-3 text-sm text-[#D6D3C4]">
+                  Status: {llmCredential.trialActive ? "ativo" : "expirado"} · modelo {llmCredential.model} · chave {llmCredential.apiKeyPreview} · expira em {llmCredential.trialEndsAt ? new Date(llmCredential.trialEndsAt).toLocaleDateString("pt-BR") : "--"}
+                </p>
+              )}
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Provider</span>
+              <input className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]" value={llmCredentialForm.provider} onChange={(event) => setLlmCredentialForm({ ...llmCredentialForm, provider: event.target.value })} required />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Base URL</span>
+              <input className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]" value={llmCredentialForm.baseUrl} onChange={(event) => setLlmCredentialForm({ ...llmCredentialForm, baseUrl: event.target.value })} placeholder="https://api.openai.com/v1" required />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Modelo</span>
+              <input className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]" value={llmCredentialForm.model} onChange={(event) => setLlmCredentialForm({ ...llmCredentialForm, model: event.target.value })} required />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">API key</span>
+              <input className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]" value={llmCredentialForm.apiKey} onChange={(event) => setLlmCredentialForm({ ...llmCredentialForm, apiKey: event.target.value })} type="password" required />
+            </label>
+            <div className="flex flex-wrap gap-3">
+              <button className="rounded-full bg-[#F5A623] px-5 py-3 font-black text-[#071120]" type="submit">Ativar teste com minha chave</button>
+              {llmCredential?.configured && <button className="rounded-full border border-white/20 px-5 py-3 font-bold text-[#D6D3C4]" type="button" onClick={handleDeleteLlmCredential}>Remover chave</button>}
+            </div>
           </form>
 
           <div className="space-y-4">
