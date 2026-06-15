@@ -33,8 +33,12 @@ assert.match(adminLib, /totalCostUsd/, "dashboard admin deve agregar custo LLM")
 assert.match(adminLib, /modelConfigs/, "dashboard admin deve expor configurações de modelo");
 assert.match(adminLib, /inputCostPer1M/, "admin deve permitir configurar preço de entrada por 1M tokens");
 assert.match(adminLib, /outputCostPer1M/, "admin deve permitir configurar preço de saída por 1M tokens");
-assert.match(adminLib, /Jobs assíncronos/, "readiness deve listar jobs assíncronos como lacuna de produção");
-assert.match(adminLib, /Backup/, "readiness deve listar backup/restore como lacuna de produção");
+assert.match(adminLib, /Jobs assíncronos/, "readiness deve listar jobs assíncronos");
+assert.match(adminLib, /status:\s*"partial"/, "readiness deve suportar status parcial para itens com cobertura inicial");
+assert.match(adminLib, /cortex_worker/, "readiness deve refletir worker já operacional para beta inicial");
+assert.match(adminLib, /Rate limit persistente já protege POST \/api\/jobs/, "readiness deve refletir rate limit de criação de jobs já implementado");
+assert.match(adminLib, /Backup diário local ativo/, "readiness deve refletir backup local já implementado");
+assert.match(adminLib, /Observabilidade operacional/, "readiness deve listar observabilidade operacional");
 assert.match(adminLib, /Checkout/, "readiness deve listar checkout/billing como lacuna de produção");
 
 const schema = readFileSync(join(root, files.schema), "utf8");

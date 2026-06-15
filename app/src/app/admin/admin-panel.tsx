@@ -54,7 +54,7 @@ type AdminPayload = {
     tokens: number;
     costUsd: string;
   }>;
-  readiness: Array<{ status: "done" | "needed"; title: string; detail: string }>;
+  readiness: Array<{ status: "done" | "partial" | "needed"; title: string; detail: string }>;
 };
 
 const initialTenant = { slug: "", name: "", plan: "beta", monthlyQuota: "1000000" };
@@ -73,6 +73,12 @@ const initialModelConfig = {
   enabled: true,
   isDefault: true,
 };
+
+const readinessPresentation = {
+  done: { label: "OK", className: "text-[#7DC8F5]" },
+  partial: { label: "PARCIAL", className: "text-[#F5A623]" },
+  needed: { label: "FALTA", className: "text-[#FF6B6B]" },
+} as const;
 
 export function AdminPanel() {
   const [data, setData] = useState<AdminPayload | null>(null);
@@ -182,6 +188,7 @@ export function AdminPanel() {
   }
 
   const neededItems = useMemo(() => data?.readiness.filter((item) => item.status === "needed") ?? [], [data]);
+  const partialItems = useMemo(() => data?.readiness.filter((item) => item.status === "partial") ?? [], [data]);
 
   if (!data) {
     return <div className="rounded-3xl border border-[#2487D8]/20 bg-[#0C1A2E] p-6 text-[#F5A623]">{status}</div>;
@@ -302,16 +309,21 @@ export function AdminPanel() {
         </div>
 
         <div className="rounded-3xl border border-[#F5A623]/20 bg-[#0C1A2E] p-5">
-          <h3 className="text-xl font-black">Modo de produção: o que falta</h3>
-          <p className="mt-2 text-sm text-[#D6D3C4]">{neededItems.length} itens ainda bloqueiam beta aberto com usuários reais.</p>
+          <h3 className="text-xl font-black">Modo de produção: lacunas e endurecimentos</h3>
+          <p className="mt-2 text-sm text-[#D6D3C4]">
+            {neededItems.length} itens ainda bloqueiam beta aberto com usuários reais. {partialItems.length} itens já têm cobertura inicial e pedem endurecimento antes de escalar.
+          </p>
           <div className="mt-4 space-y-3">
-            {data.readiness.map((item) => (
-              <div className="rounded-2xl border border-white/10 bg-[#071120] p-4" key={item.title}>
-                <span className={item.status === "done" ? "text-[#7DC8F5]" : "text-[#F5A623]"}>{item.status === "done" ? "OK" : "FALTA"}</span>
-                <h4 className="mt-1 font-black">{item.title}</h4>
-                <p className="mt-1 text-sm text-[#D6D3C4]">{item.detail}</p>
-              </div>
-            ))}
+            {data.readiness.map((item) => {
+              const presentation = readinessPresentation[item.status];
+              return (
+                <div className="rounded-2xl border border-white/10 bg-[#071120] p-4" key={item.title}>
+                  <span className={presentation.className}>{presentation.label}</span>
+                  <h4 className="mt-1 font-black">{item.title}</h4>
+                  <p className="mt-1 text-sm text-[#D6D3C4]">{item.detail}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

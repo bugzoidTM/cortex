@@ -56,19 +56,19 @@ export const PRODUCTION_READINESS_ITEMS = [
     detail: "Quota mensal por tenant, limite de entrada por execução e max_tokens no provider.",
   },
   {
-    status: "needed",
+    status: "partial",
     title: "Jobs assíncronos e worker",
-    detail: "Tirar execução longa do request HTTP; criar fila/worker com retry, timeout e estados PENDING/PROCESSING/FAILED.",
+    detail: "Operacional para beta inicial: POST /api/jobs enfileira PENDING e o serviço Swarm cortex_worker processa PENDING/PROCESSING/COMPLETED/FAILED. Próximo endurecimento: retry com backoff, reprocessamento manual e timeout por provider.",
   },
   {
-    status: "needed",
+    status: "partial",
     title: "Rate limit e antiabuso",
-    detail: "Limitar login e criação de jobs por IP/usuário/tenant para proteger custo e disponibilidade.",
+    detail: "Rate limit persistente já protege POST /api/jobs por tenant/usuário/IP via RateLimitEvent. Próximo endurecimento: aplicar também em login, auditoria admin e políticas por plano.",
   },
   {
-    status: "needed",
+    status: "partial",
     title: "Backup e restore PostgreSQL",
-    detail: "Backup diário automatizado, retenção, teste documentado de restore e alerta de falha.",
+    detail: "Backup diário local ativo no serviço Swarm cortex_backup, com pg_dump -Fc, retenção e smoke de restore via pg_restore -l. Próximo endurecimento: cópia offsite e alerta obrigatório de falha.",
   },
   {
     status: "needed",
@@ -81,9 +81,9 @@ export const PRODUCTION_READINESS_ITEMS = [
     detail: "Convite, reset de senha, boas-vindas e alertas operacionais.",
   },
   {
-    status: "needed",
+    status: "partial",
     title: "Observabilidade operacional",
-    detail: "Logs estruturados, visão de jobs falhos, latência, custo por tenant e alertas básicos.",
+    detail: "Cobertura inicial disponível: logs estruturados JSON no worker/backup, jobs recentes, custos por tenant e alertas via CORTEX_ALERT_WEBHOOK_URL. Próximo endurecimento: dashboard de latência, métricas históricas e monitor externo obrigatório.",
   },
   {
     status: "needed",
