@@ -10,8 +10,13 @@ for (const model of ["model User", "model TenantMembership", "model Session"]) {
   assert.ok(schema.includes(model), `Schema precisa conter ${model}`);
 }
 
-for (const relation of ["memberships  TenantMembership[]", "sessions     Session[]", "role      String", "passwordHash String"]) {
-  assert.ok(schema.includes(relation), `Schema de auth/tenancy incompleto: ${relation}`);
+for (const relation of [
+  /memberships\s+TenantMembership\[\]/,
+  /sessions\s+Session\[\]/,
+  /role\s+String/,
+  /passwordHash\s+String/,
+]) {
+  assert.match(schema, relation, `Schema de auth/tenancy incompleto: ${relation}`);
 }
 
 assert.ok(existsSync(authLib), "Auth helper precisa existir em src/lib/auth.ts");
