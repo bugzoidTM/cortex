@@ -28,4 +28,4 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src ./src
 
 EXPOSE 3000
-CMD ["sh", "-c", "DB_PASSWORD=$(tr -d '\\n' < /run/secrets/cortex_postgres_password); export DATABASE_URL=\"postgresql://cortex:${DB_PASSWORD}@db:5432/cortex?schema=public\"; until npx prisma migrate deploy; do echo 'waiting for cortex db/migrations'; sleep 3; done; npm run start"]
+CMD ["sh", "-c", "DB_PASSWORD=$(node -e \"process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/cortex_postgres_password', 'utf8').trim()))\"); export DATABASE_URL=\"postgresql://cortex:${DB_PASSWORD}@db:5432/cortex?schema=public\"; until npx prisma migrate deploy; do echo 'waiting for cortex db/migrations'; sleep 3; done; npm run start"]
