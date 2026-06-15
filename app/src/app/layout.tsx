@@ -14,14 +14,14 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://cortex.nutef.com"),
-  title: "Cortex — Núcleo de conteúdo autônomo",
+  title: "Cortex — Plataforma de conteúdo com IA",
   description:
-    "Protótipo SaaS da Nutef para gerar pacotes de conteúdo em português no tom da marca.",
+    "Plataforma da Nutef para gerar pacotes de conteúdo em português no tom da marca, com revisão humana e controle de consumo.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Cortex — Núcleo de conteúdo autônomo",
+    title: "Cortex — Plataforma de conteúdo com IA",
     description:
       "Gere pacotes de conteúdo em português, no tom da marca, com aprovação humana e controle de consumo.",
     url: "https://cortex.nutef.com/",

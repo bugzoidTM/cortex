@@ -68,7 +68,7 @@ type BrandProfileForm = {
 
 const initialForm = {
   title: "Como usar IA para conteúdo local",
-  objective: "Gerar pacote semanal de conteúdo para validar o MVP",
+  objective: "Gerar pacote semanal de conteúdo para educar clientes e captar leads",
   primaryPlatform: "LinkedIn",
   context:
     "Cliente quer explicar automação e IA de forma prática, humana e sem promessas exageradas.",
@@ -248,10 +248,10 @@ export function CortexJobConsole() {
     <div className="rounded-[2rem] border border-[#2487D8]/20 bg-[#071120] p-5 shadow-2xl shadow-black/30 lg:p-6">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
         <div>
-          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Console MVP real</p>
-          <h3 className="mt-3 text-2xl font-black">Criar pacote real</h3>
+          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Console do cliente</p>
+          <h3 className="mt-3 text-2xl font-black">Entrar no Cortex</h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#D6D3C4]">
-            Este formulário exige login, chama <code>/api/jobs</code>, grava briefing/job/artifact/ledger no PostgreSQL e atualiza a lista do tenant.
+            Acesse sua conta para editar a voz da marca, criar jobs de conteúdo e acompanhar histórico, quota e custo estimado do tenant.
           </p>
           {auth.authenticated && <p className="mt-2 text-sm text-[#7DC8F5]">Sessão: {auth.email} · tenant {auth.tenantId}</p>}
         </div>

@@ -1,73 +1,36 @@
 import Link from "next/link";
 import { CortexJobConsole } from "./components/cortex-job-console";
 
-const flowSteps = [
+const outcomes = [
+  ["Pacote de conteúdo com IA", "Gere posts, roteiros, carrosséis, legendas e e-mails a partir de um briefing curto."],
+  ["Voz da marca", "O Cortex usa tom, público, promessa e restrições cadastradas para reduzir retrabalho."],
+  ["Controle de consumo", "Cada execução registra modelo, tokens, custo estimado, status e histórico por tenant."],
+];
+
+const howItWorks = [
   {
     label: "01",
-    title: "Onboarding guiado",
-    description:
-      "Empresa, público, promessa, exemplos de voz, restrições e identidade em um fluxo de 8 minutos.",
+    title: "Cadastre a voz da marca",
+    description: "Defina tom, público, promessa, restrições e exemplos aprovados. Isso vira contexto para as próximas gerações.",
   },
   {
     label: "02",
-    title: "Briefing de campanha",
-    description:
-      "O usuário informa tema, plataforma, objetivo e insumos. O Cortex transforma em plano executável.",
+    title: "Envie o briefing",
+    description: "Informe tema, objetivo, plataforma prioritária e contexto estratégico. O job entra na fila do tenant.",
   },
   {
     label: "03",
-    title: "Fila de aprovação humana",
-    description:
-      "Posts, roteiros, ganchos e e-mails ficam prontos para revisar, ajustar e exportar antes de publicar.",
+    title: "Revise e use o pacote",
+    description: "Receba um artifact em Markdown para revisar, adaptar e publicar com aprovação humana.",
   },
 ];
 
-const packageItems = [
-  "Post LinkedIn",
-  "Roteiro Reels/TikTok",
-  "Carrossel em outline",
-  "3 legendas curtas",
-  "5 ganchos alternativos",
-  "E-mail/newsletter",
-];
+const packageItems = ["Post para LinkedIn", "Roteiro curto", "Outline de carrossel", "Legendas", "E-mail/newsletter", "Notas de revisão"];
 
-const metrics = [
-  ["<20min", "até o primeiro valor"],
-  ["12+", "peças por ideia"],
-  ["100%", "PT-BR e no tom"],
-];
-
-const navigationItems = [
-  ["Dashboard", "Visão de créditos, jobs recentes e próximos pacotes."],
-  ["Voz da marca", "Memória, exemplos aprovados e regras de linguagem."],
-  ["Central de jobs", "Executar, pausar, repetir e auditar fluxos de IA."],
-  ["Aprovação", "Revisão humana antes de exportar ou integrar publicação."],
-  ["Admin Nutef", "Tenants, planos, consumo, erros e limites operacionais."],
-];
-
-const productionCards = [
-  {
-    title: "Executar pacote agora",
-    status: "ação principal",
-    body: "Botão único para gerar pacote semanal a partir de uma ideia, usando voz da marca e limites do plano.",
-  },
-  {
-    title: "Ledger de consumo",
-    status: "controle MVP",
-    body: "Cada execução registra tenant, modelo, tokens, custo estimado, latência e status para proteger margem.",
-  },
-  {
-    title: "Admin Nutef",
-    status: "operação",
-    body: "Tela interna para enxergar clientes ativos, jobs com falha, crédito restante e volume por skill.",
-  },
-];
-
-const sprintTasks = [
-  "Persistir perfil de voz e briefing com banco/ORM.",
-  "Criar API de jobs com estados: pendente, processando, concluído, falhou e cancelado.",
-  "Conectar provider OpenAI-compatible por gateway interno.",
-  "Salvar artefatos em workspace por tenant e expor histórico.",
+const pricing = [
+  ["Acesso", "Por convite/aprovação", "O Cortex ainda opera com onboarding assistido para garantir configuração correta da marca."],
+  ["Cobrança", "Plano mensal + limite de uso", "Cada tenant tem quota mensal de tokens e limite por execução para previsibilidade de custo."],
+  ["Operação", "Admin Nutef", "Superadmin acompanha tenants, usuários, modelo LLM, consumo, jobs e custo estimado."],
 ];
 
 export default function Home() {
@@ -86,86 +49,88 @@ export default function Home() {
             </div>
           </div>
           <nav className="hidden items-center gap-6 text-sm font-semibold text-[#D6D3C4] md:flex">
-            <a className="hover:text-[#F5A623]" href="#mapa">Mapa</a>
-            <a className="hover:text-[#F5A623]" href="#jobs">Jobs</a>
-            <a className="hover:text-[#F5A623]" href="#sprint">Sprint</a>
+            <a className="hover:text-[#F5A623]" href="#produto">Produto</a>
+            <a className="hover:text-[#F5A623]" href="#como-funciona">Como funciona</a>
+            <a className="hover:text-[#F5A623]" href="#planos">Planos</a>
           </nav>
           <a
-            href="#demo"
+            href="#acesso"
             className="rounded-full border border-[#F5A623]/40 px-5 py-2 text-sm font-semibold text-[#F5A623] transition hover:bg-[#F5A623] hover:text-[#071120]"
           >
-            Ver protótipo
+            Entrar no Cortex
           </a>
         </div>
 
         <div className="mx-auto grid max-w-7xl gap-12 py-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-28">
           <div>
             <div className="mb-6 inline-flex rounded-full border border-[#2487D8]/40 bg-[#142A42]/80 px-4 py-2 text-sm text-[#D6D3C4]">
-              Núcleo de conteúdo autônomo com IA
+              Plataforma de conteúdo com IA para marcas em operação
             </div>
             <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
-              De uma ideia a um mês de conteúdo. <span className="text-[#F5A623]">No seu tom.</span>
+              Transforme uma ideia em um pacote de conteúdo. <span className="text-[#F5A623]">Com voz, custo e revisão sob controle.</span>
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-[#D6D3C4]">
-              O Cortex aprende a voz da marca, transforma briefings em pacotes multiplataforma e mantém humano no circuito para aprovação, calendário e melhoria contínua.
+              O Cortex ajuda equipes e negócios a gerar conteúdo em português com consistência: briefing, voz da marca, geração por IA, aprovação humana, histórico e controle de consumo no mesmo fluxo.
             </p>
             <div className="mt-9 flex flex-col gap-4 sm:flex-row">
-              <a className="rounded-full bg-[#F5A623] px-7 py-4 text-center font-bold text-[#071120] shadow-[0_0_32px_rgba(245,166,35,0.28)] transition hover:scale-[1.02]" href="#onboarding">
-                Simular onboarding
+              <a className="rounded-full bg-[#F5A623] px-7 py-4 text-center font-bold text-[#071120] shadow-[0_0_32px_rgba(245,166,35,0.28)] transition hover:scale-[1.02]" href="#acesso">
+                Solicitar acesso
               </a>
-              <a className="rounded-full border border-[#2487D8]/50 px-7 py-4 text-center font-bold text-[#ECEFF4] transition hover:bg-[#142A42]" href="#jobs">
-                Executar pacote agora
+              <a className="rounded-full border border-[#2487D8]/50 px-7 py-4 text-center font-bold text-[#ECEFF4] transition hover:bg-[#142A42]" href="#produto">
+                O que o Cortex faz
               </a>
             </div>
           </div>
 
-          <div id="demo" className="rounded-[2rem] border border-white/10 bg-[#0C1A2E]/90 p-4 shadow-2xl shadow-black/40 backdrop-blur">
+          <div className="rounded-[2rem] border border-white/10 bg-[#0C1A2E]/90 p-4 shadow-2xl shadow-black/40 backdrop-blur">
             <div className="rounded-[1.5rem] border border-[#2487D8]/20 bg-[#071120] p-5">
               <div className="mb-5 flex items-center justify-between border-b border-white/10 pb-4">
                 <div>
-                  <p className="text-sm text-[#D6D3C4]">Job em execução</p>
-                  <p className="text-xl font-bold">1 ideia → pacote semanal</p>
+                  <p className="text-sm text-[#D6D3C4]">Job de conteúdo</p>
+                  <p className="text-xl font-bold">1 briefing → pacote revisável</p>
                 </div>
-                <span className="rounded-full bg-[#F5A623]/15 px-3 py-1 text-sm font-semibold text-[#F5A623]">82%</span>
+                <span className="rounded-full bg-[#F5A623]/15 px-3 py-1 text-sm font-semibold text-[#F5A623]">IA + humano</span>
               </div>
               <div className="space-y-3">
                 {packageItems.map((item, index) => (
                   <div key={item} className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#142A42] px-4 py-3">
                     <span>{item}</span>
-                    <span className={index < 4 ? "text-[#1B9DE0]" : "text-[#D6D3C4]"}>{index < 4 ? "pronto" : "fila"}</span>
+                    <span className={index < 4 ? "text-[#1B9DE0]" : "text-[#D6D3C4]"}>{index < 4 ? "gerado" : "incluído"}</span>
                   </div>
                 ))}
               </div>
               <div className="mt-5 rounded-2xl border border-[#F5A623]/20 bg-[#F5A623]/10 p-4 text-sm leading-6 text-[#F9E6BC]">
-                Voz detectada: formal, técnica, humana, sem jargão de guru. CTA recomendado: demonstração prática.
+                Exemplo de regra aplicada: linguagem formal, técnica e humana; sem jargão de guru; conteúdo sempre revisável antes de publicar.
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="mapa" className="px-6 py-16 sm:px-10 lg:px-16">
+      <section id="produto" className="px-6 py-16 sm:px-10 lg:px-16">
         <div className="mx-auto max-w-7xl">
-          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Mapa de navegação</p>
-          <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight">Do protótipo visual para um SaaS operável por cliente, equipe e admin.</h2>
-          <div className="mt-8 grid gap-4 md:grid-cols-5">
-            {navigationItems.map(([title, body]) => (
-              <article key={title} className="rounded-[1.5rem] border border-white/10 bg-[#0C1A2E] p-5">
-                <h3 className="font-bold text-[#F5A623]">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[#D6D3C4]">{body}</p>
+          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">O que o Cortex faz</p>
+          <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight">Para equipes que precisam publicar com consistência, sem perder o tom da marca.</h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {outcomes.map(([title, body]) => (
+              <article key={title} className="rounded-[1.5rem] border border-white/10 bg-[#0C1A2E] p-6">
+                <h3 className="text-xl font-bold text-[#F5A623]">{title}</h3>
+                <p className="mt-4 leading-7 text-[#D6D3C4]">{body}</p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="onboarding" className="px-6 py-16 sm:px-10 lg:px-16">
+      <section id="como-funciona" className="px-6 py-16 sm:px-10 lg:px-16">
         <div className="mx-auto max-w-7xl">
-          <div className="grid gap-6 md:grid-cols-3">
-            {flowSteps.map((step) => (
+          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Como funciona</p>
+          <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight">Um fluxo simples para transformar briefing em material pronto para revisão.</h2>
+          <div className="mt-8 grid gap-6 md:grid-cols-3">
+            {howItWorks.map((step) => (
               <article key={step.label} className="rounded-[1.5rem] border border-white/10 bg-[#0C1A2E] p-7">
                 <p className="mb-6 text-sm font-black text-[#F5A623]">{step.label}</p>
-                <h2 className="text-2xl font-bold">{step.title}</h2>
+                <h3 className="text-2xl font-bold">{step.title}</h3>
                 <p className="mt-4 leading-7 text-[#D6D3C4]">{step.description}</p>
               </article>
             ))}
@@ -173,51 +138,39 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="jobs" className="px-6 py-16 sm:px-10 lg:px-16">
+      <section id="acesso" className="px-6 py-16 sm:px-10 lg:px-16">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Central de jobs</p>
-            <h2 className="mt-4 text-4xl font-black tracking-tight">Primeira versão: simples, vendável e controlada.</h2>
+            <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Acesso ao produto</p>
+            <h2 className="mt-4 text-4xl font-black tracking-tight">Entre na sua conta ou solicite liberação para a sua marca.</h2>
             <p className="mt-5 leading-8 text-[#D6D3C4]">
-              O próximo bloco é transformar este protótipo em app real: auth, tenant, perfil de voz, jobs de IA, ledger de uso e painel admin da Nutef.
+              O Cortex usa contas por tenant. Se você já recebeu acesso, faça login abaixo. Se ainda não tem conta, solicite onboarding para configurar marca, quota e usuários.
             </p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              {metrics.map(([value, label]) => (
-                <div key={value} className="rounded-[1.5rem] border border-[#2487D8]/20 bg-[#142A42] p-6">
-                  <p className="text-4xl font-black text-[#F5A623]">{value}</p>
-                  <p className="mt-3 text-sm leading-6 text-[#D6D3C4]">{label}</p>
-                </div>
-              ))}
+            <div className="mt-8 rounded-[1.5rem] border border-[#F5A623]/20 bg-[#F5A623]/10 p-6 text-[#F9E6BC]">
+              <h3 className="font-black">Acesso por convite</h3>
+              <p className="mt-3 text-sm leading-6">Neste momento, novas contas são criadas pela Nutef para garantir configuração correta de voz da marca, plano e limites de uso.</p>
             </div>
           </div>
-          <div className="grid gap-4">
-            {productionCards.map((card) => (
-              <article key={card.title} className="rounded-[1.5rem] border border-white/10 bg-[#0C1A2E] p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-2xl font-bold">{card.title}</h3>
-                  <span className="rounded-full bg-[#2487D8]/15 px-3 py-1 text-sm font-semibold text-[#7DC8F5]">{card.status}</span>
-                </div>
-                <p className="mt-4 leading-7 text-[#D6D3C4]">{card.body}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-        <div className="mx-auto mt-10 max-w-7xl">
           <CortexJobConsole />
         </div>
       </section>
 
-      <section id="sprint" className="px-6 py-16 sm:px-10 lg:px-16">
-        <div className="mx-auto max-w-7xl rounded-[2rem] border border-[#F5A623]/20 bg-[#F5A623]/10 p-8 lg:p-10">
-          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#F5A623]">Próximo sprint de produção</p>
-          <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight">Sair do mock navegável para MVP com dados reais e controle de margem.</h2>
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {sprintTasks.map((task) => (
-              <div key={task} className="rounded-2xl border border-white/10 bg-[#071120]/75 p-5 text-[#F9E6BC]">
-                {task}
-              </div>
+      <section id="planos" className="px-6 py-16 sm:px-10 lg:px-16">
+        <div className="mx-auto max-w-7xl rounded-[2rem] border border-[#2487D8]/20 bg-[#0C1A2E] p-8 lg:p-10">
+          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Planos e acesso</p>
+          <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight">Preço previsível, limite de uso e acompanhamento operacional.</h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {pricing.map(([title, value, body]) => (
+              <article key={title} className="rounded-2xl border border-white/10 bg-[#071120]/75 p-5">
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#7DC8F5]">{title}</p>
+                <h3 className="mt-3 text-2xl font-black text-[#F5A623]">{value}</h3>
+                <p className="mt-4 text-sm leading-6 text-[#D6D3C4]">{body}</p>
+              </article>
             ))}
           </div>
+          <p className="mt-6 text-sm leading-6 text-[#D6D3C4]">
+            Para uma proposta comercial, a Nutef define o plano conforme volume esperado, número de marcas/usuários e necessidade de suporte no processo editorial.
+          </p>
         </div>
       </section>
 

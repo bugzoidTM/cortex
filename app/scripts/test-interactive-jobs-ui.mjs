@@ -9,7 +9,7 @@ assert.ok(existsSync(componentPath), "Console interativo de jobs precisa existir
 const source = readFileSync(componentPath, "utf8");
 const requiredTexts = [
   "use client",
-  "Criar pacote real",
+  "Entrar no Cortex",
   "Tema do pacote",
   "Objetivo",
   "Plataforma prioritária",
