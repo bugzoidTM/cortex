@@ -1,5 +1,7 @@
+import { getEmailRuntimeStatus } from "@/lib/email";
 import { getLlmRuntimeStatus } from "@/lib/llm-provider-config";
 import { prisma } from "@/lib/prisma";
+import { getWooviRuntimeStatus } from "@/lib/woovi";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,8 @@ export async function GET() {
         latencyMs: Date.now() - startedAt,
       },
       llm: await getLlmRuntimeStatus(),
+      woovi: getWooviRuntimeStatus(),
+      email: getEmailRuntimeStatus(),
     });
   } catch (error) {
     return Response.json(
@@ -26,6 +30,8 @@ export async function GET() {
           latencyMs: Date.now() - startedAt,
         },
         llm: await getLlmRuntimeStatus(),
+        woovi: getWooviRuntimeStatus(),
+        email: getEmailRuntimeStatus(),
         error: error instanceof Error ? error.message : "unknown_error",
       },
       { status: 500 },

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CortexJobConsole } from "./components/cortex-job-console";
+import { SelfServiceCheckout } from "./components/self-service-checkout";
 
 const outcomes = [
   ["Pacote de conteúdo com IA", "Gere posts, roteiros, carrosséis, legendas e e-mails a partir de um briefing curto."],
@@ -147,11 +148,14 @@ export default function Home() {
               O Cortex usa contas por tenant. Se você já recebeu acesso, faça login abaixo. Se ainda não tem conta, solicite onboarding para configurar marca, quota e usuários. No teste de 14 dias, você pode usar sua própria chave API; nos planos pagos, o LLM gerenciado pela Nutef já vem configurado.
             </p>
             <div className="mt-8 rounded-[1.5rem] border border-[#F5A623]/20 bg-[#F5A623]/10 p-6 text-[#F9E6BC]">
-              <h3 className="font-black">Acesso por convite</h3>
-              <p className="mt-3 text-sm leading-6">Neste momento, novas contas são criadas pela Nutef para garantir configuração correta de voz da marca, plano e limites de uso.</p>
+              <h3 className="font-black">Self-service com Pix</h3>
+              <p className="mt-3 text-sm leading-6">Novas marcas podem iniciar pelo checkout Woovi. Após confirmação do pagamento, o tenant é liberado automaticamente para usar o console.</p>
             </div>
           </div>
-          <CortexJobConsole />
+          <div className="grid gap-6">
+            <SelfServiceCheckout />
+            <CortexJobConsole />
+          </div>
         </div>
       </section>
 

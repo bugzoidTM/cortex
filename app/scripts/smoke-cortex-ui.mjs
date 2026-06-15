@@ -4,8 +4,9 @@ import { join } from "node:path";
 
 const page = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
 const consoleComponent = readFileSync(join(process.cwd(), "src/app/components/cortex-job-console.tsx"), "utf8");
+const checkoutComponent = readFileSync(join(process.cwd(), "src/app/components/self-service-checkout.tsx"), "utf8");
 const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8");
-const publicCopy = `${page}\n${consoleComponent}\n${layout}`;
+const publicCopy = `${page}\n${consoleComponent}\n${checkoutComponent}\n${layout}`;
 
 const requiredTexts = [
   "O que o Cortex faz",
@@ -17,7 +18,8 @@ const requiredTexts = [
   "Voz da marca",
   "Controle de consumo",
   "Para equipes que precisam publicar com consistência",
-  "Acesso por convite",
+  "Self-service com Pix",
+  "Criar conta e pagar com Pix",
   "Cortex — Plataforma de conteúdo com IA",
 ];
 

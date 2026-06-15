@@ -20,11 +20,14 @@
     "test:quota-guard": "node scripts/test-quota-guard-contract.mjs",
     "test:admin-panel": "node scripts/test-admin-panel-contract.mjs",
     "test:production-hardening": "node scripts/test-production-hardening-contract.mjs",
-    "test:byok-trial": "node scripts/test-byok-trial-contract.mjs"
+    "test:byok-trial": "node scripts/test-byok-trial-contract.mjs",
+    "test:self-service-billing": "node scripts/test-self-service-billing-contract.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1",
+    "@types/nodemailer": "^8.0.1",
     "next": "16.2.9",
+    "nodemailer": "^9.0.0",
     "prisma": "^6.19.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",

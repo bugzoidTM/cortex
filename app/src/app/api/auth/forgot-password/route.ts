@@ -1,0 +1,45 @@
+import { createHash, randomBytes } from "node:crypto";
+import { sendTransactionalEmail } from "@/lib/email";
+import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+export const dynamic = "force-dynamic";
+
+// Cria PasswordResetToken e envia e-mail transacional quando o usuário existe.
+
+const schema = z.object({ email: z.string().email().transform((value) => value.toLowerCase()) });
+
+function tokenHash(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => null);
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json({ ok: false, error: "invalid_input" }, { status: 400 });
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  if (user) {
+    const token = randomBytes(32).toString("base64url");
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: tokenHash(token),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+    const baseUrl = process.env.CORTEX_PUBLIC_URL ?? "https://cortex.nutef.com";
+    const resetUrl = `${baseUrl}/?resetToken=${encodeURIComponent(token)}#acesso`;
+    await sendTransactionalEmail({
+      to: user.email,
+      userId: user.id,
+      subject: "Redefinição de senha do Cortex",
+      text: `Use este link em até 1 hora para redefinir sua senha: ${resetUrl}`,
+      html: `<p>Use este link em até 1 hora para redefinir sua senha:</p><p><a href="${resetUrl}">Redefinir senha</a></p>`,
+    }).catch(() => null);
+  }
+
+  return Response.json({ ok: true });
+}

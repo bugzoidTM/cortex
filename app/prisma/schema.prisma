@@ -24,6 +24,8 @@ model Tenant {
   memberships        TenantMembership[]
   llmProviderConfigs LLMProviderConfig[]
   llmCredential      TenantLlmCredential?
+  subscriptions      Subscription[]
+  paymentInvoices    PaymentInvoice[]
 }
 
 model TenantLlmCredential {
@@ -77,8 +79,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships TenantMembership[]
-  sessions    Session[]
+  memberships         TenantMembership[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  emailMessages       EmailMessage[]
 }
 
 model TenantMembership {
@@ -106,6 +110,85 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailMessage {
+  id          String    @id @default(cuid())
+  userId      String?
+  to          String
+  subject     String
+  text        String
+  html        String?
+  status      String    @default("PENDING")
+  provider    String    @default("smtp")
+  error       String?
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([to, createdAt])
+  @@index([status, createdAt])
+}
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  tenantId            String
+  plan                String
+  status              SubscriptionStatus @default(PENDING)
+  amountCents         Int
+  currency            String             @default("BRL")
+  monthlyQuota        Int
+  currentPeriodStart  DateTime?
+  currentPeriodEnd    DateTime?
+  pastDueSince        DateTime?
+  cancelAtPeriodEnd   Boolean            @default(false)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoices PaymentInvoice[]
+
+  @@index([tenantId, status])
+  @@index([status, currentPeriodEnd])
+}
+
+model PaymentInvoice {
+  id                String        @id @default(cuid())
+  tenantId          String
+  subscriptionId    String?
+  wooviCorrelationID String       @unique
+  wooviChargeId     String?
+  status            InvoiceStatus @default(PENDING)
+  amountCents       Int
+  paymentLinkUrl    String?
+  brCode            String?
+  qrCodeImage       String?
+  paidAt            DateTime?
+  expiresAt         DateTime?
+  rawPayload        Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([status, expiresAt])
 }
 
 model BrandProfile {
@@ -216,4 +299,19 @@ enum JobStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELED
 }

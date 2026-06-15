@@ -1,3 +1,4 @@
+import { BillingBlockedError, assertTenantBillingActive } from "@/lib/billing";
 import { AuthRequiredError, requireCurrentSession } from "@/lib/auth";
 import { createJobInputSchema, enqueueContentPackageJob, getMvpSnapshot, QuotaExceededError } from "@/lib/cortex-mvp";
 import { checkRateLimit, jobCreationRateLimitKey, RateLimitExceededError } from "@/lib/rate-limit";
@@ -20,6 +21,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireCurrentSession();
+    await assertTenantBillingActive(session.tenantId);
     await checkRateLimit({ key: jobCreationRateLimitKey(session), action: "create_job", limit: 10, windowSeconds: 60 * 60 });
     const body = await request.json().catch(() => null);
     const parsed = createJobInputSchema.safeParse(body);
@@ -58,6 +60,9 @@ export async function POST(request: Request) {
     }
     if (error instanceof QuotaExceededError) {
       return Response.json({ ok: false, error: "quota_exceeded", message: error.message, quotaStatus: error.quotaStatus }, { status: 402 });
+    }
+    if (error instanceof BillingBlockedError) {
+      return Response.json({ ok: false, error: "billing_blocked", status: error.status, paymentLinkUrl: error.paymentLinkUrl }, { status: 402 });
     }
     throw error;
   }
