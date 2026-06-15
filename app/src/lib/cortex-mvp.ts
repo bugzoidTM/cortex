@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { notifyAlert } from "./alerts";
 import { generateContentPackageArtifact } from "./llm-gateway";
 import { prisma } from "./prisma";
 
@@ -265,10 +266,21 @@ export async function processContentPackageJob(jobId: string) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "worker_unknown_error";
+    // Erros transitórios voltam para a fila enquanto houver tentativas; só falham de vez ao esgotar.
+    const canRetry = job.attempts < MAX_WORKER_ATTEMPTS;
     const failed = await prisma.skillJob.update({
       where: { id: job.id },
-      data: { status: "FAILED", error: message, completedAt: new Date(), lockedAt: null },
+      data: canRetry
+        ? { status: "PENDING", error: message, lockedAt: null }
+        : { status: "FAILED", error: message, completedAt: new Date(), lockedAt: null },
     });
+    if (!canRetry) {
+      await notifyAlert(`Job ${job.id} falhou após ${job.attempts} tentativas`, {
+        tenantId: job.tenantId,
+        skill: job.skill,
+        error: message,
+      });
+    }
     return { job: failed, artifact: null, ledger: null };
   }
 }

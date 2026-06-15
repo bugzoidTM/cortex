@@ -75,6 +75,23 @@ Definir no ambiente do serviço web, preferencialmente via secret para a chave:
 
 Sem essas variáveis, o Cortex continua funcional com `provider=internal-mvp`, `model=deterministic-template-v1` e `status=fallback`.
 
+## Validar geração real do LLM (ponta a ponta)
+
+Dentro do container `web` ou `worker` (com `DATABASE_URL` e `OPENAI_COMPATIBLE_*` definidos):
+
+```bash
+npm run verify:llm-e2e
+```
+
+Sai com erro se o job cair no fallback determinístico (provider `internal-mvp`) ou não concluir — garante que o provider real está respondendo em produção.
+
+## Observabilidade, alertas e backup offsite
+
+- **Healthchecks:** `db` usa `pg_isready`; `web` consulta `/api/health`. O Swarm reinicia containers "vivos, mas quebrados".
+- **Alertas:** definir `CORTEX_ALERT_WEBHOOK_URL` (Slack/Discord/etc.) nos serviços `worker` e `backup`. Dispara em job que falha em definitivo, erro recorrente do worker (throttle de 5 min) e falha de backup.
+- **Backup offsite:** definir `CORTEX_BACKUP_RCLONE_REMOTE` (ex.: `s3cortex:cortex-backups`) no serviço `backup` e configurar o remoto do `rclone` via `RCLONE_CONFIG_*` ou secret. Sem isso, o backup continua local (no volume do VPS).
+- **Uptime externo recomendado:** monitorar `https://cortex.nutef.com/api/health` por um serviço externo (UptimeRobot, BetterStack, etc.) para detecção independente do VPS.
+
 ## Observação de segurança
 
 `npm audit --omit=dev` reporta vulnerabilidade moderada herdada por `next@16.2.9` via `postcss <8.5.10`. `npm audit fix` já removeu vulnerabilidades corrigíveis do Prisma; `npm audit fix --force` ainda propõe downgrade quebrado para `next@9.3.3`, então não foi aplicado. Revisar quando houver release estável do Next corrigindo a cadeia.

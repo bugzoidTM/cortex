@@ -13,6 +13,12 @@ services:
       - cortex_postgres_password
     volumes:
       - cortex_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cortex -d cortex"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     deploy:
       replicas: 1
       restart_policy:
@@ -35,8 +41,19 @@ services:
       OPENAI_COMPATIBLE_API_KEY_FILE: "/run/secrets/cortex_openai_compatible_api_key"
       OPENAI_COMPATIBLE_MODEL: "qwen3.7-max"
       OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS: "1800"
+      OPENAI_COMPATIBLE_TIMEOUT_MS: "60000"
+      # AJUSTAR: preco real do qwen3.7-max no closeai (USD por 1M tokens).
+      # Sem estes valores o custo gravado no ledger fica 0 e a protecao de margem nao funciona.
+      OPENAI_COMPATIBLE_INPUT_COST_PER_1M: "1.00"
+      OPENAI_COMPATIBLE_OUTPUT_COST_PER_1M: "4.00"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_SUPERUSER_EMAILS: "admin@nutef.com"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       replicas: 1
       restart_policy:
@@ -66,8 +83,15 @@ services:
       OPENAI_COMPATIBLE_API_KEY_FILE: "/run/secrets/cortex_openai_compatible_api_key"
       OPENAI_COMPATIBLE_MODEL: "qwen3.7-max"
       OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS: "1800"
+      OPENAI_COMPATIBLE_TIMEOUT_MS: "60000"
+      # AJUSTAR: preco real do qwen3.7-max no closeai (USD por 1M tokens).
+      # Sem estes valores o custo gravado no ledger fica 0 e a protecao de margem nao funciona.
+      OPENAI_COMPATIBLE_INPUT_COST_PER_1M: "1.00"
+      OPENAI_COMPATIBLE_OUTPUT_COST_PER_1M: "4.00"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_WORKER_POLL_INTERVAL_MS: "5000"
+      # Opcional: webhook (Slack/Discord/etc.) para alerta de job falho e erro do worker.
+      # CORTEX_ALERT_WEBHOOK_URL: "https://hooks.slack.com/services/XXX"
     command: >
       sh -c 'DB_PASSWORD=$$(tr -d "\n" < /run/secrets/cortex_postgres_password); export DATABASE_URL="postgresql://cortex:$${DB_PASSWORD}@db:5432/cortex?schema=public"; node scripts/cortex-worker.mjs'
     deploy:
@@ -87,6 +111,10 @@ services:
       CORTEX_BACKUP_DIR: "/backups"
       CORTEX_BACKUP_RETENTION_DAYS: "7"
       CORTEX_BACKUP_INTERVAL_SECONDS: "86400"
+      # Opcional: cópia offsite via rclone (remoto já configurado por env RCLONE_CONFIG_* ou secret).
+      # CORTEX_BACKUP_RCLONE_REMOTE: "s3cortex:cortex-backups"
+      # Opcional: webhook para alerta de falha de backup.
+      # CORTEX_ALERT_WEBHOOK_URL: "https://hooks.slack.com/services/XXX"
     command: sh scripts/backup-postgres.sh
     deploy:
       replicas: 1

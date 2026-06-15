@@ -17,29 +17,58 @@ type RateLimitOptions = {
   windowSeconds: number;
 };
 
-export async function checkRateLimit({ key, action, limit, windowSeconds }: RateLimitOptions) {
-  const now = new Date();
-  const windowStart = new Date(now.getTime() - windowSeconds * 1000);
-
-  const count = await prisma.rateLimitEvent.count({
+async function countEvents(key: string, action: string, windowSeconds: number) {
+  const windowStart = new Date(Date.now() - windowSeconds * 1000);
+  return prisma.rateLimitEvent.count({
     where: { key, action, createdAt: { gte: windowStart } },
   });
+}
+
+async function pruneOldEventsOccasionally() {
+  if (Math.random() < 0.02) {
+    await prisma.rateLimitEvent.deleteMany({
+      where: { createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    });
+  }
+}
+
+export async function recordRateLimitEvent(key: string, action: string) {
+  await prisma.rateLimitEvent.create({ data: { key, action } });
+  await pruneOldEventsOccasionally();
+}
+
+export async function checkRateLimit({ key, action, limit, windowSeconds }: RateLimitOptions) {
+  const count = await countEvents(key, action, windowSeconds);
 
   if (count >= limit) {
     throw new RateLimitExceededError("rate_limited", windowSeconds);
   }
 
-  await prisma.rateLimitEvent.create({ data: { key, action } });
-
-  if (Math.random() < 0.02) {
-    await prisma.rateLimitEvent.deleteMany({
-      where: { createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
-    });
-  }
+  await recordRateLimitEvent(key, action);
 
   return { remaining: Math.max(0, limit - count - 1), limit, windowSeconds };
 }
 
+// Verifica o limite sem registrar evento. Usado no login, onde só queremos
+// contabilizar tentativas que falharam (evita travar usuário legítimo).
+export async function assertWithinRateLimit({ key, action, limit, windowSeconds }: RateLimitOptions) {
+  const count = await countEvents(key, action, windowSeconds);
+
+  if (count >= limit) {
+    throw new RateLimitExceededError("rate_limited", windowSeconds);
+  }
+
+  return { remaining: Math.max(0, limit - count), limit, windowSeconds };
+}
+
 export function jobCreationRateLimitKey(session: { tenantId: string; userId: string }) {
   return `tenant:${session.tenantId}:user:${session.userId}`;
+}
+
+export function loginIpRateLimitKey(ip: string) {
+  return `login:ip:${ip}`;
+}
+
+export function loginEmailRateLimitKey(email: string) {
+  return `login:email:${email.toLowerCase()}`;
 }

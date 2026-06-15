@@ -16,6 +16,7 @@
     "test:brand-profile": "node scripts/test-brand-profile-contract.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "verify:llm-e2e": "tsx scripts/verify-llm-e2e.ts",
     "test:quota-guard": "node scripts/test-quota-guard-contract.mjs",
     "test:admin-panel": "node scripts/test-admin-panel-contract.mjs",
     "test:production-hardening": "node scripts/test-production-hardening-contract.mjs"
@@ -23,8 +24,10 @@
   "dependencies": {
     "@prisma/client": "^6.19.1",
     "next": "16.2.9",
+    "prisma": "^6.19.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "tsx": "^4.22.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -34,9 +37,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
-    "prisma": "^6.19.1",
     "tailwindcss": "^4",
-    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

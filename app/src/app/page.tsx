@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CortexJobConsole } from "./components/cortex-job-console";
 
 const flowSteps = [
@@ -219,6 +220,16 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <footer className="px-6 py-10 sm:px-10 lg:px-16">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-sm text-[#D6D3C4] sm:flex-row">
+          <p>© {new Date().getFullYear()} Cortex · by Nutef</p>
+          <nav className="flex items-center gap-6">
+            <Link className="hover:text-[#F5A623]" href="/termos">Termos de Uso</Link>
+            <Link className="hover:text-[#F5A623]" href="/privacidade">Política de Privacidade</Link>
+          </nav>
+        </div>
+      </footer>
     </main>
   );
 }

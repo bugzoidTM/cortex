@@ -44,6 +44,9 @@ export async function generateContentPackageArtifact(input: CreateJobInput, bran
 
   const messages = buildMessages(input, brand);
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getTimeoutMs());
+
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
@@ -57,6 +60,7 @@ export async function generateContentPackageArtifact(input: CreateJobInput, bran
         max_tokens: getMaxOutputTokens(),
         messages,
       }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -85,8 +89,19 @@ export async function generateContentPackageArtifact(input: CreateJobInput, bran
       status: "completed",
     };
   } catch {
-    return deterministicFallback(input, brand, Date.now() - startedAt, "openai_compatible_exception");
+    const reason = controller.signal.aborted ? "openai_compatible_timeout" : "openai_compatible_exception";
+    return deterministicFallback(input, brand, Date.now() - startedAt, reason);
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+function getTimeoutMs() {
+  const configured = Number(process.env.OPENAI_COMPATIBLE_TIMEOUT_MS ?? "60000");
+  if (!Number.isFinite(configured) || configured < 1000) {
+    return 60000;
+  }
+  return Math.min(Math.floor(configured), 300000);
 }
 
 function buildMessages(input: CreateJobInput, brand?: BrandContext | null) {
