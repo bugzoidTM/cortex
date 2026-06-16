@@ -72,3 +72,16 @@ export function loginIpRateLimitKey(ip: string) {
 export function loginEmailRateLimitKey(email: string) {
   return `login:email:${email.toLowerCase()}`;
 }
+
+// Extrai o IP do cliente respeitando o proxy reverso (Traefik) à frente do app.
+export function getClientIp(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0]?.trim() || "unknown";
+  }
+  return request.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+export function ipRateLimitKey(scope: string, ip: string) {
+  return `${scope}:ip:${ip}`;
+}

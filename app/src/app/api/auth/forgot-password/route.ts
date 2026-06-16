@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { sendTransactionalEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, getClientIp, ipRateLimitKey, RateLimitExceededError } from "@/lib/rate-limit";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,20 @@ function tokenHash(token: string) {
 }
 
 export async function POST(request: Request) {
+  try {
+    await checkRateLimit({
+      key: ipRateLimitKey("forgot_password", getClientIp(request)),
+      action: "forgot_password",
+      limit: 5,
+      windowSeconds: 60 * 60,
+    });
+  } catch (error) {
+    if (error instanceof RateLimitExceededError) {
+      return Response.json({ ok: false, error: "rate_limited", retryAfterSeconds: error.retryAfterSeconds }, { status: 429 });
+    }
+    throw error;
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

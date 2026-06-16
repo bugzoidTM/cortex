@@ -49,6 +49,8 @@ jobs:
           npm run test:quota-guard
           npm run test:admin-panel
           npm run test:production-hardening
+          npm run test:byok-trial
+          npm run test:self-service-billing
 
       - name: Build
         run: npm run build

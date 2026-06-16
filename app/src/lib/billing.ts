@@ -12,6 +12,7 @@ export const SELF_SERVICE_PLANS = {
 
 const GRACE_DAYS = 5;
 const PERIOD_DAYS = 30;
+const RENEWAL_LEAD_DAYS = 3;
 
 type PlanKey = keyof typeof SELF_SERVICE_PLANS;
 
@@ -137,7 +138,6 @@ export async function handleWooviChargeCompleted(payload: WooviWebhookPayload) {
   }
 
   const paidAt = payload.charge?.paidAt ? new Date(payload.charge.paidAt) : new Date();
-  const periodEnd = new Date(paidAt.getTime() + PERIOD_DAYS * 24 * 60 * 60 * 1000);
 
   const result = await prisma.$transaction(async (tx) => {
     const invoice = await tx.paymentInvoice.findUniqueOrThrow({
@@ -145,10 +145,22 @@ export async function handleWooviChargeCompleted(payload: WooviWebhookPayload) {
       include: { subscription: true, tenant: { include: { memberships: { include: { user: true }, take: 1 } } } },
     });
 
+    // Idempotência: reenvio do mesmo evento não recalcula período nem reenvia e-mail.
+    if (invoice.status === "PAID") {
+      return { invoice, subscription: invoice.subscription, user: invoice.tenant.memberships[0]?.user, alreadyProcessed: true };
+    }
+
     const updatedInvoice = await tx.paymentInvoice.update({
       where: { id: invoice.id },
       data: { status: "PAID", paidAt, rawPayload: payload },
     });
+
+    // Renovação paga antes do vencimento estende a partir do fim do período atual (sem perder dias).
+    const periodBase =
+      invoice.subscription?.currentPeriodEnd && invoice.subscription.currentPeriodEnd > paidAt
+        ? invoice.subscription.currentPeriodEnd
+        : paidAt;
+    const periodEnd = new Date(periodBase.getTime() + PERIOD_DAYS * 24 * 60 * 60 * 1000);
 
     const subscription = invoice.subscription
       ? await tx.subscription.update({
@@ -169,10 +181,10 @@ export async function handleWooviChargeCompleted(payload: WooviWebhookPayload) {
       });
     }
 
-    return { invoice: updatedInvoice, subscription, user: invoice.tenant.memberships[0]?.user };
+    return { invoice: updatedInvoice, subscription, user: invoice.tenant.memberships[0]?.user, alreadyProcessed: false };
   });
 
-  if (result.user) {
+  if (!result.alreadyProcessed && result.user) {
     await sendTransactionalEmail({
       to: result.user.email,
       userId: result.user.id,
@@ -183,6 +195,95 @@ export async function handleWooviChargeCompleted(payload: WooviWebhookPayload) {
   }
 
   return result;
+}
+
+// Gera a cobrança de renovação (nova invoice PENDING + cobrança Woovi) para o próximo ciclo
+// e avisa o titular do vencimento. Idempotente por ciclo: só roda quando não há invoice PENDING.
+export async function createRenewalInvoice(subscriptionId: string) {
+  const subscription = await prisma.subscription.findUniqueOrThrow({
+    where: { id: subscriptionId },
+    include: { tenant: { include: { memberships: { include: { user: true }, take: 1 } } } },
+  });
+
+  const owner = subscription.tenant.memberships[0]?.user;
+  if (!owner) {
+    throw new Error("renewal_owner_missing");
+  }
+
+  const plan = SELF_SERVICE_PLANS[subscription.plan as PlanKey] ?? {
+    name: `Plano ${subscription.plan}`,
+    amountCents: subscription.amountCents,
+    monthlyQuota: subscription.monthlyQuota,
+  };
+  const correlationID = `cortex_${subscription.plan}_renew_${randomBytes(12).toString("hex")}`;
+  const dueDate = subscription.currentPeriodEnd ? subscription.currentPeriodEnd.toLocaleDateString("pt-BR") : "em breve";
+
+  const charge = await createWooviCharge({
+    correlationID,
+    value: subscription.amountCents,
+    comment: `Cortex ${plan.name} - renovação mensal`,
+    customer: { name: owner.name ?? subscription.tenant.name, email: owner.email },
+    expiresIn: (RENEWAL_LEAD_DAYS + 4) * 24 * 60 * 60,
+  });
+
+  const invoice = await prisma.paymentInvoice.create({
+    data: {
+      tenantId: subscription.tenantId,
+      subscriptionId: subscription.id,
+      wooviCorrelationID: charge.correlationID,
+      wooviChargeId: charge.wooviChargeId,
+      amountCents: subscription.amountCents,
+      paymentLinkUrl: charge.paymentLinkUrl,
+      brCode: charge.brCode,
+      qrCodeImage: charge.qrCodeImage,
+      expiresAt: charge.expiresAt,
+      rawPayload: charge.raw as object,
+    },
+  });
+
+  await sendTransactionalEmail({
+    to: owner.email,
+    userId: owner.id,
+    subject: "Sua assinatura Cortex vence em breve — renove via Pix",
+    text: `Olá ${owner.name ?? ""}, sua assinatura ${plan.name} vence em ${dueDate}. Renove via Pix para manter o acesso: ${charge.paymentLinkUrl ?? "link indisponível"}`,
+    html: `<p>Olá ${owner.name ?? ""}, sua assinatura <b>${plan.name}</b> vence em ${dueDate}.</p><p><a href="${charge.paymentLinkUrl ?? "#"}">Renovar com Pix</a></p>`,
+  }).catch(() => null);
+
+  return invoice;
+}
+
+// Rotina periódica do worker: gera cobranças de renovação perto do vencimento e marca
+// inadimplência (PAST_DUE) das assinaturas vencidas além da carência.
+export async function runBillingRenewalCycle(now = new Date()) {
+  const renewalThreshold = new Date(now.getTime() + RENEWAL_LEAD_DAYS * 24 * 60 * 60 * 1000);
+
+  const dueSoon = await prisma.subscription.findMany({
+    where: {
+      status: "ACTIVE",
+      currentPeriodEnd: { lte: renewalThreshold },
+      invoices: { none: { status: "PENDING" } },
+    },
+    select: { id: true },
+    take: 100,
+  });
+
+  let renewalsCreated = 0;
+  for (const sub of dueSoon) {
+    try {
+      await createRenewalInvoice(sub.id);
+      renewalsCreated += 1;
+    } catch (error) {
+      console.error(JSON.stringify({ event: "renewal_invoice_error", subscriptionId: sub.id, error: error instanceof Error ? error.message : "unknown" }));
+    }
+  }
+
+  const hardBlockBefore = new Date(now.getTime() - GRACE_DAYS * 24 * 60 * 60 * 1000);
+  const overdue = await prisma.subscription.updateMany({
+    where: { status: "ACTIVE", currentPeriodEnd: { lt: hardBlockBefore } },
+    data: { status: "PAST_DUE", pastDueSince: now },
+  });
+
+  return { renewalsCreated, markedPastDue: overdue.count };
 }
 
 export async function assertTenantBillingActive(tenantId: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 const plans = [
   { id: "starter", name: "Plano Starter", price: "R$ 97/mês", quota: "300 mil tokens/mês" },
@@ -12,6 +12,20 @@ export function SelfServiceCheckout() {
   const [status, setStatus] = useState("Escolha um plano, crie a conta e pague com Pix para liberar o Cortex.");
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [brCode, setBrCode] = useState<string | null>(null);
+
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetStatus, setResetStatus] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const token = new URLSearchParams(window.location.search).get("resetToken");
+    if (!token) return;
+    // Leitura única do query param após o mount, evitando mismatch de hidratação SSR/cliente.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setResetToken(token);
+  }, []);
 
   async function handleCheckout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +48,49 @@ export function SelfServiceCheckout() {
       setStatus("Checkout criado. Pague com Pix; a liberação ocorre automaticamente quando a Woovi confirmar OPENPIX:CHARGE_COMPLETED.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao criar checkout.");
+    }
+  }
+
+  async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setResetStatus("Enviando link de redefinição...");
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      if (response.status === 429) {
+        setResetStatus("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`Falha ao solicitar redefinição: ${response.status}`);
+      }
+      setResetStatus("Se o e-mail tiver conta, enviamos um link de redefinição válido por 1 hora. Confira sua caixa de entrada e o spam.");
+    } catch (error) {
+      setResetStatus(error instanceof Error ? error.message : "Erro ao solicitar redefinição.");
+    }
+  }
+
+  async function handleResetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setResetStatus("Redefinindo senha...");
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: resetToken, password: newPassword }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? `Falha ao redefinir: ${response.status}`);
+      }
+      setResetToken(null);
+      setNewPassword("");
+      setResetStatus("Senha redefinida com sucesso. Faça login com a nova senha no console ao lado.");
+    } catch (error) {
+      setResetStatus(error instanceof Error ? error.message : "Erro ao redefinir senha.");
     }
   }
 
@@ -71,7 +128,38 @@ export function SelfServiceCheckout() {
         {brCode && <textarea className="mt-3 min-h-24 w-full rounded-xl bg-[#0C1A2E] p-3 text-xs" readOnly value={brCode} />}
       </div>
 
-      <p className="mt-4 text-sm text-[#D6D3C4]">Esqueci minha senha: informe seu e-mail no login e solicite reset; o link transacional é enviado quando SMTP estiver configurado.</p>
+      <div className="mt-6 rounded-2xl border border-white/10 bg-[#071120] p-5">
+        <h4 className="text-lg font-black text-[#F5A623]">Esqueci minha senha</h4>
+        {resetToken ? (
+          <form className="mt-3 grid gap-3" onSubmit={handleResetPassword}>
+            <p className="text-sm leading-6 text-[#D6D3C4]">Você abriu um link de redefinição. Defina sua nova senha abaixo.</p>
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4]"
+              type="password"
+              placeholder="Nova senha (mínimo 12 caracteres)"
+              minLength={12}
+              required
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+            <button className="rounded-full bg-[#F5A623] px-6 py-3 font-black text-[#071120]" type="submit">Redefinir senha</button>
+          </form>
+        ) : (
+          <form className="mt-3 grid gap-3" onSubmit={handleForgotPassword}>
+            <p className="text-sm leading-6 text-[#D6D3C4]">Informe seu e-mail para receber um link de redefinição válido por 1 hora.</p>
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-[#ECEFF4]"
+              type="email"
+              placeholder="seu@email.com"
+              required
+              value={forgotEmail}
+              onChange={(event) => setForgotEmail(event.target.value)}
+            />
+            <button className="rounded-full border border-[#F5A623]/40 px-6 py-3 font-bold text-[#F5A623] transition hover:bg-[#F5A623] hover:text-[#071120]" type="submit">Enviar link de redefinição</button>
+          </form>
+        )}
+        {resetStatus && <p className="mt-3 text-sm text-[#7DC8F5]">{resetStatus}</p>}
+      </div>
     </div>
   );
 }

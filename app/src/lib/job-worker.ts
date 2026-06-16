@@ -1,10 +1,32 @@
 import { notifyAlert } from "./alerts";
 import { prisma } from "./prisma";
 import { processNextContentPackageJob } from "./cortex-mvp";
+import { runBillingRenewalCycle } from "./billing";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const ALERT_THROTTLE_MS = 5 * 60 * 1000;
+const DEFAULT_BILLING_CYCLE_INTERVAL_MS = 60 * 60 * 1000;
 let lastWorkerErrorAlertAt = 0;
+let lastBillingCycleAt = 0;
+
+// Recorrência mensal: gera cobranças de renovação e marca inadimplência, gated por intervalo.
+async function maybeRunBillingCycle() {
+  const intervalMs = Number(process.env.CORTEX_BILLING_CYCLE_INTERVAL_MS ?? DEFAULT_BILLING_CYCLE_INTERVAL_MS.toString());
+  const now = Date.now();
+  if (now - lastBillingCycleAt < intervalMs) {
+    return;
+  }
+  lastBillingCycleAt = now;
+  try {
+    const result = await runBillingRenewalCycle();
+    if (result.renewalsCreated || result.markedPastDue) {
+      console.log(JSON.stringify({ event: "billing_cycle", ...result }));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    console.error(JSON.stringify({ event: "billing_cycle_error", error: message }));
+  }
+}
 
 export async function runWorkerLoop() {
   const pollIntervalMs = Number(process.env.CORTEX_WORKER_POLL_INTERVAL_MS ?? DEFAULT_POLL_INTERVAL_MS.toString());
@@ -12,6 +34,7 @@ export async function runWorkerLoop() {
 
   while (true) {
     const startedAt = Date.now();
+    await maybeRunBillingCycle();
     try {
       const result = await processNextContentPackageJob();
       if (result) {

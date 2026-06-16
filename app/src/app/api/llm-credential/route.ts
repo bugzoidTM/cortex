@@ -1,5 +1,6 @@
 import { AuthRequiredError, requireCurrentSession } from "@/lib/auth";
 import { deleteTenantLlmCredential, getTenantLlmCredentialStatus, upsertTenantLlmCredential } from "@/lib/tenant-llm-credential";
+import { checkRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
 import { ZodError } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 function handleCredentialError(error: unknown) {
   if (error instanceof AuthRequiredError) {
     return Response.json({ ok: false, error: "auth_required" }, { status: 401 });
+  }
+  if (error instanceof RateLimitExceededError) {
+    return Response.json({ ok: false, error: "rate_limited", retryAfterSeconds: error.retryAfterSeconds }, { status: 429 });
   }
   if (error instanceof ZodError) {
     return Response.json({ ok: false, error: "invalid_input", issues: error.flatten() }, { status: 400 });
@@ -31,6 +35,12 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const session = await requireCurrentSession();
+    await checkRateLimit({
+      key: `llm_credential:${session.tenantId}:${session.userId}`,
+      action: "llm_credential",
+      limit: 30,
+      windowSeconds: 60 * 60,
+    });
     const body = await request.json().catch(() => null);
     const credential = await upsertTenantLlmCredential(session.tenantId, body);
     return Response.json({ ok: true, credential });

@@ -46,6 +46,10 @@ export async function POST(request: Request) {
 
   // O segredo protege a confirmação real de pagamento (mutação da assinatura para ACTIVE).
   const expectedSecret = getWooviWebhookSecret();
+  // Em produção, falha fechado: sem segredo configurado não processamos cobrança real.
+  if (!expectedSecret && process.env.NODE_ENV === "production") {
+    return Response.json({ ok: false, error: "webhook_secret_not_configured", secretEnv: WEBHOOK_SECRET_ENV }, { status: 500 });
+  }
   const receivedSecret = request.headers.get("authorization")?.trim();
   if (expectedSecret && receivedSecret !== expectedSecret) {
     return Response.json({ ok: false, error: "invalid_webhook_authorization", secretEnv: WEBHOOK_SECRET_ENV }, { status: 401 });

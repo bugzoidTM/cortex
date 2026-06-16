@@ -68,7 +68,7 @@ export const PRODUCTION_READINESS_ITEMS = [
   {
     status: "partial",
     title: "Rate limit e antiabuso",
-    detail: "Rate limit persistente já protege POST /api/jobs por tenant/usuário/IP via RateLimitEvent. Próximo endurecimento: aplicar também em login, auditoria admin e políticas por plano.",
+    detail: "Rate limit persistente já protege POST /api/jobs por tenant/usuário/IP via RateLimitEvent, além de login, checkout, recuperação de senha e gestão de chave BYOK por IP. Próximo endurecimento: auditoria admin e políticas por plano.",
   },
   {
     status: "partial",
@@ -76,14 +76,14 @@ export const PRODUCTION_READINESS_ITEMS = [
     detail: "Backup diário local ativo no serviço Swarm cortex_backup, com pg_dump -Fc, retenção e smoke de restore via pg_restore -l. Próximo endurecimento: cópia offsite e alerta obrigatório de falha.",
   },
   {
-    status: "needed",
+    status: "done",
     title: "Checkout e billing",
-    detail: "Checkout/assinatura, status de pagamento, bloqueio de inadimplência e upgrade/downgrade de plano.",
+    detail: "Checkout self-service Woovi (Pix), liberação automática por webhook OPENPIX:CHARGE_COMPLETED, bloqueio de inadimplência por assinatura e renovação mensal com nova cobrança e aviso de vencimento.",
   },
   {
-    status: "needed",
+    status: "done",
     title: "E-mails transacionais",
-    detail: "Convite, reset de senha, boas-vindas e alertas operacionais.",
+    detail: "Envio transacional via relay SMTP (Brevo): confirmação de checkout, pagamento confirmado, reset de senha e aviso de vencimento, com registro em EmailMessage.",
   },
   {
     status: "partial",
