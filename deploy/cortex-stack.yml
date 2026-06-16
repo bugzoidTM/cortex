@@ -117,14 +117,15 @@ services:
       - Nutef
     secrets:
       - cortex_postgres_password
+      - cortex_rclone_conf
     volumes:
       - cortex_postgres_backups:/backups
     environment:
       CORTEX_BACKUP_DIR: "/backups"
       CORTEX_BACKUP_RETENTION_DAYS: "7"
       CORTEX_BACKUP_INTERVAL_SECONDS: "86400"
-      # Opcional: cópia offsite via rclone (remoto já configurado por env RCLONE_CONFIG_* ou secret).
-      # CORTEX_BACKUP_RCLONE_REMOTE: "s3cortex:cortex-backups"
+      RCLONE_CONFIG: "/run/secrets/cortex_rclone_conf"
+      CORTEX_BACKUP_RCLONE_REMOTE: "s3cortex:cortex-backups"
       # Opcional: webhook para alerta de falha de backup.
       # CORTEX_ALERT_WEBHOOK_URL: "https://hooks.slack.com/services/XXX"
     command: sh scripts/backup-postgres.sh
@@ -145,6 +146,8 @@ secrets:
   cortex_woovi_webhook_secret:
     external: true
   cortex_smtp_password_v2:
+    external: true
+  cortex_rclone_conf:
     external: true
 
 volumes:
