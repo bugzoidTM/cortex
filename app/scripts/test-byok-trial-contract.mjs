@@ -67,7 +67,7 @@ assert.ok(admin.includes("Trial self-service BYOK 14 dias"), "readiness/admin de
 assert.ok(admin.includes("Checkout e billing"), "readiness deve manter billing como item operacional");
 
 const page = readFileSync(pagePath, "utf8");
-for (const text of ["Teste de 14 dias", "use sua própria chave API", "planos pagos", "LLM gerenciado pela Nutef"]) {
+for (const text of ["Teste de 14 dias", "use sua própria chave API", "planos pagos", "gerenciado pela Nutef"]) {
   assert.ok(page.includes(text), `homepage deve explicar trial e planos pagos: ${text}`);
 }
 

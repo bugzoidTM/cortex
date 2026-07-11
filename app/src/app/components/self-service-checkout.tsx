@@ -95,7 +95,7 @@ export function SelfServiceCheckout() {
       }
       setResetToken(null);
       setNewPassword("");
-      setResetStatus("Senha redefinida com sucesso. Faça login com a nova senha no console ao lado.");
+      setResetStatus("Senha redefinida com sucesso. Entre com a nova senha para acessar seu painel.");
     } catch (error) {
       setResetStatus(error instanceof Error ? error.message : "Erro ao redefinir senha.");
     }

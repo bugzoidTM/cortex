@@ -5,7 +5,7 @@ import { SelfServiceCheckout } from "./components/self-service-checkout";
 const outcomes = [
   ["Pacote de conteúdo com IA", "Gere posts, roteiros, carrosséis, legendas e e-mails a partir de um briefing curto."],
   ["Voz da marca", "O Cortex usa tom, público, promessa e restrições cadastradas para reduzir retrabalho."],
-  ["Controle de consumo", "Cada execução registra modelo, tokens, custo estimado, status e histórico por tenant."],
+  ["Controle de consumo", "Cada geração registra o modelo, o uso, o custo estimado e o histórico da sua marca."],
 ];
 
 const howItWorks = [
@@ -17,12 +17,12 @@ const howItWorks = [
   {
     label: "02",
     title: "Envie o briefing",
-    description: "Informe tema, objetivo, plataforma prioritária e contexto estratégico. O job entra na fila do tenant.",
+    description: "Informe tema, objetivo, plataforma principal e contexto. Sua solicitação entra na fila de geração.",
   },
   {
     label: "03",
     title: "Revise e use o pacote",
-    description: "Receba um artifact em Markdown para revisar, adaptar e publicar com aprovação humana.",
+    description: "Receba um pacote em Markdown para revisar, adaptar e publicar com aprovação humana.",
   },
 ];
 
@@ -30,8 +30,8 @@ const packageItems = ["Post para LinkedIn", "Roteiro curto", "Outline de carross
 
 const pricing = [
   ["Teste de 14 dias", "use sua própria chave API", "O usuário pode validar o Cortex com uma chave OpenAI-compatible própria; a chave fica criptografada, mascarada na tela e expira automaticamente ao fim do teste."],
-  ["Planos pagos", "LLM gerenciado pela Nutef", "Nos planos pagos, o tenant usa o modelo configurado no painel admin, com quota mensal, custo estimado e limites por execução."],
-  ["Operação", "Admin Nutef", "Superadmin acompanha tenants, usuários, modelo LLM, consumo, jobs e custo estimado."],
+  ["Planos pagos", "Modelo gerenciado pela Nutef", "Nos planos pagos, sua conta usa o modelo gerenciado pela Nutef, com limite mensal de conteúdo e uso acompanhado."],
+  ["Operação", "Cuidada pela Nutef", "A Nutef acompanha o uso, o modelo e o custo de cada conta para manter a operação saudável."],
 ];
 
 export default function Home() {
@@ -87,7 +87,7 @@ export default function Home() {
             <div className="rounded-[1.5rem] border border-[#2487D8]/20 bg-[#071120] p-5">
               <div className="mb-5 flex items-center justify-between border-b border-white/10 pb-4">
                 <div>
-                  <p className="text-sm text-[#D6D3C4]">Job de conteúdo</p>
+                  <p className="text-sm text-[#D6D3C4]">Pacote de conteúdo</p>
                   <p className="text-xl font-bold">1 briefing → pacote revisável</p>
                 </div>
                 <span className="rounded-full bg-[#F5A623]/15 px-3 py-1 text-sm font-semibold text-[#F5A623]">IA + humano</span>
@@ -145,13 +145,13 @@ export default function Home() {
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Acesso ao produto</p>
             <h2 className="mt-4 text-4xl font-black tracking-tight">Entre na sua conta ou comece seu teste de 14 dias.</h2>
             <p className="mt-5 leading-8 text-[#D6D3C4]">
-              O Cortex usa contas por marca (tenant). Se você já tem conta, faça login abaixo. Se ainda não tem, crie a
-              conta de teste de 14 dias direto no console — sem pagamento, usando a sua própria chave API — ou assine um
-              plano pago com Pix, em que o LLM gerenciado pela Nutef já vem configurado.
+              O Cortex organiza tudo por marca. Se você já tem conta, entre abaixo. Se ainda não tem, crie a conta de
+              teste de 14 dias — sem pagamento, usando a sua própria chave de API — ou assine um plano pago com Pix, em
+              que o modelo gerenciado pela Nutef já vem configurado.
             </p>
             <div className="mt-8 rounded-[1.5rem] border border-[#F5A623]/20 bg-[#F5A623]/10 p-6 text-[#F9E6BC]">
               <h3 className="font-black">Self-service com Pix</h3>
-              <p className="mt-3 text-sm leading-6">Novas marcas podem iniciar pelo checkout Woovi. Após confirmação do pagamento, o tenant é liberado automaticamente para usar o console.</p>
+              <p className="mt-3 text-sm leading-6">Novas marcas podem começar pelo checkout Pix. Assim que o pagamento é confirmado, sua conta é liberada automaticamente.</p>
             </div>
           </div>
           <div className="grid gap-6">

@@ -806,7 +806,7 @@ function ContaSection(props: {
           <div className="mt-4 rounded-xl border border-white/8 bg-[#0A1728] p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="font-bold">Plano {quota.plan}</span>
-              <span className="text-[#8FA3B8]">{quota.remainingTokens.toLocaleString("pt-BR")} de conteúdo restante este mês</span>
+              <span className="text-[#8FA3B8]">{quota.usagePercent}% do limite usado este mês</span>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#071120]">
               <div className="h-full rounded-full bg-[#F5A623]" style={{ width: `${quota.usagePercent}%` }} />
