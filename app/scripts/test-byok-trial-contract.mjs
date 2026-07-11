@@ -63,7 +63,7 @@ for (const text of ["/api/llm-credential", "Teste de 14 dias", "Sua própria cha
 }
 
 const admin = readFileSync(adminPath, "utf8");
-assert.ok(admin.includes("Trial BYOK 14 dias"), "readiness/admin deve citar trial BYOK 14 dias");
+assert.ok(admin.includes("Trial self-service BYOK 14 dias"), "readiness/admin deve citar trial self-service BYOK 14 dias");
 assert.ok(admin.includes("Checkout e billing"), "readiness deve manter billing como item operacional");
 
 const page = readFileSync(pagePath, "utf8");

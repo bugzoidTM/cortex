@@ -23,6 +23,9 @@ services:
       replicas: 1
       restart_policy:
         condition: any
+      resources:
+        limits:
+          memory: 2048M
 
   web:
     image: cortex:latest
@@ -54,6 +57,7 @@ services:
       CORTEX_PUBLIC_URL: "https://cortex.nutef.com"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_SUPERUSER_EMAILS: "admin@nutef.com"
+      CORTEX_ALERT_EMAIL: "elenilton_freitas@yahoo.com.br"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -64,6 +68,9 @@ services:
       replicas: 1
       restart_policy:
         condition: any
+      resources:
+        limits:
+          memory: 2048M
       labels:
         - traefik.enable=true
         - traefik.docker.network=Nutef
@@ -102,14 +109,25 @@ services:
       CORTEX_PUBLIC_URL: "https://cortex.nutef.com"
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_WORKER_POLL_INTERVAL_MS: "5000"
+      CORTEX_ALERT_EMAIL: "elenilton_freitas@yahoo.com.br"
       # Opcional: webhook (Slack/Discord/etc.) para alerta de job falho e erro do worker.
       # CORTEX_ALERT_WEBHOOK_URL: "https://hooks.slack.com/services/XXX"
     command: >
       sh -c 'DB_PASSWORD=$$(node -e "process.stdout.write(encodeURIComponent(require('"'"'fs'"'"').readFileSync('"'"'/run/secrets/cortex_postgres_password'"'"', '"'"'utf8'"'"').trim()))"); export DATABASE_URL="postgresql://cortex:$${DB_PASSWORD}@db:5432/cortex?schema=public"; node scripts/cortex-worker.mjs'
+    healthcheck:
+      # O worker grava heartbeat a cada 15s; sem batida em 60s o Swarm reinicia o container.
+      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/cortex-worker-heartbeat');process.exit(Date.now()-s.mtimeMs<60000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     deploy:
       replicas: 1
       restart_policy:
         condition: any
+      resources:
+        limits:
+          memory: 1536M
 
   backup:
     image: cortex:latest
@@ -118,6 +136,7 @@ services:
     secrets:
       - cortex_postgres_password
       - cortex_rclone_conf
+      - cortex_smtp_password_v2
     volumes:
       - cortex_postgres_backups:/backups
     environment:
@@ -126,6 +145,13 @@ services:
       CORTEX_BACKUP_INTERVAL_SECONDS: "86400"
       RCLONE_CONFIG: "/run/secrets/cortex_rclone_conf"
       CORTEX_BACKUP_RCLONE_REMOTE: "s3cortex:cortex-backups"
+      SMTP_PASSWORD_FILE: "/run/secrets/cortex_smtp_password_v2"
+      SMTP_HOST: "smtp-relay.brevo.com"
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: "aed8b3001@smtp-brevo.com"
+      SMTP_FROM: "Cortex <cortex@nutef.com>"
+      CORTEX_ALERT_EMAIL: "elenilton_freitas@yahoo.com.br"
       # Opcional: webhook para alerta de falha de backup.
       # CORTEX_ALERT_WEBHOOK_URL: "https://hooks.slack.com/services/XXX"
     command: sh scripts/backup-postgres.sh
@@ -133,6 +159,9 @@ services:
       replicas: 1
       restart_policy:
         condition: any
+      resources:
+        limits:
+          memory: 512M
 
 secrets:
   cortex_postgres_password:

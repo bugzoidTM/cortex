@@ -6,10 +6,14 @@ RETENTION_DAYS="${CORTEX_BACKUP_RETENTION_DAYS:-7}"
 INTERVAL_SECONDS="${CORTEX_BACKUP_INTERVAL_SECONDS:-86400}"
 mkdir -p "$BACKUP_DIR"
 
-# Alerta best-effort via webhook (usa node, presente na imagem). Nunca derruba o backup.
+# Alerta best-effort via webhook e/ou e-mail (usa node+nodemailer, presentes na imagem).
+# Nunca derruba o backup.
 notify() {
   if [ -n "${CORTEX_ALERT_WEBHOOK_URL:-}" ]; then
     node -e "fetch(process.env.CORTEX_ALERT_WEBHOOK_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'[Cortex] '+process.argv[1]})}).catch(()=>{})" "$1" || true
+  fi
+  if [ -n "${CORTEX_ALERT_EMAIL:-}" ]; then
+    node -e "const nm=require('nodemailer');const fs=require('fs');const pass=process.env.SMTP_PASSWORD||(process.env.SMTP_PASSWORD_FILE?fs.readFileSync(process.env.SMTP_PASSWORD_FILE,'utf8').trim():null);if(!pass||!process.env.SMTP_HOST)process.exit(0);nm.createTransport({host:process.env.SMTP_HOST,port:Number(process.env.SMTP_PORT||'587'),secure:process.env.SMTP_SECURE==='true',auth:{user:process.env.SMTP_USER,pass}}).sendMail({from:process.env.SMTP_FROM||process.env.SMTP_USER,to:process.env.CORTEX_ALERT_EMAIL,subject:'[Cortex alerta] '+process.argv[1],text:process.argv[1]}).then(()=>process.exit(0)).catch(()=>process.exit(0))" "$1" || true
   fi
 }
 

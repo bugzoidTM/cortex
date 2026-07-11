@@ -37,7 +37,7 @@ assert.match(adminLib, /Jobs assíncronos/, "readiness deve listar jobs assíncr
 assert.match(adminLib, /status:\s*"partial"/, "readiness deve suportar status parcial para itens com cobertura inicial");
 assert.match(adminLib, /cortex_worker/, "readiness deve refletir worker já operacional para beta inicial");
 assert.match(adminLib, /Rate limit persistente já protege POST \/api\/jobs/, "readiness deve refletir rate limit de criação de jobs já implementado");
-assert.match(adminLib, /Backup diário local ativo/, "readiness deve refletir backup local já implementado");
+assert.match(adminLib, /Backup diário no serviço Swarm cortex_backup/, "readiness deve refletir backup diário com cópia offsite implementado");
 assert.match(adminLib, /Observabilidade operacional/, "readiness deve listar observabilidade operacional");
 assert.match(adminLib, /Checkout/, "readiness deve listar checkout/billing como lacuna de produção");
 

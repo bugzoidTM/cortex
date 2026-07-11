@@ -26,9 +26,14 @@ docker service update --force --image cortex:latest cortex_web
 docker service update --force --image cortex:latest cortex_worker
 
 echo "== health =="
+OK=0
 for i in $(seq 1 40); do
   H=$(curl -s -o /dev/null -w '%{http_code}' https://cortex.nutef.com/api/health || echo 000)
-  [ "$H" = "200" ] && { echo "health=200"; break; }
+  [ "$H" = "200" ] && { OK=1; echo "health=200"; break; }
   sleep 3
 done
+if [ "$OK" != "1" ]; then
+  echo "DEPLOY FALHOU: /api/health nao voltou 200 (ultimo status: $H)"
+  exit 1
+fi
 echo "deploy done"
