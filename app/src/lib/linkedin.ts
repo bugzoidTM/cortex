@@ -10,6 +10,10 @@ const AUTHORIZE_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const USERINFO_URL = "https://api.linkedin.com/v2/userinfo";
 const POSTS_URL = "https://api.linkedin.com/rest/posts";
+const IMAGES_INIT_URL = "https://api.linkedin.com/rest/images?action=initializeUpload";
+// Formatos aceitos pela Images API do LinkedIn (doc: JPG, GIF, PNG; <36.152.320 px).
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"];
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB (cap conservador)
 // Versão da Posts API (formato AAAAMM). Revisar periodicamente — o LinkedIn descontinua
 // versões antigas (foi assim que a ugcPosts morreu).
 const LINKEDIN_VERSION = "202606";
@@ -119,13 +123,76 @@ export async function fetchUserInfo(accessToken: string): Promise<LinkedInUserIn
   return { sub: json.sub, name: json.name, email: json.email, personUrn: `urn:li:person:${json.sub}` };
 }
 
+// Faz upload de uma imagem à Images API e devolve o URN (urn:li:image:...) para
+// referenciar no post. Fluxo (doc oficial): initializeUpload → PUT do binário no
+// uploadUrl com o Bearer token. Não pollamos status: com w_member_social não dá GET
+// em /rest/images (write-only), e a imagem fica pronta rápido; o post vem depois.
+export async function uploadImage(accessToken: string, ownerUrn: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  const initResponse = await fetch(IMAGES_INIT_URL, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+      "LinkedIn-Version": LINKEDIN_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({ initializeUploadRequest: { owner: ownerUrn } }),
+  });
+
+  if (!initResponse.ok) {
+    throw mapApiError(initResponse.status, await initResponse.text().catch(() => ""));
+  }
+
+  const init = (await initResponse.json()) as { value?: { uploadUrl?: string; image?: string } };
+  const uploadUrl = init.value?.uploadUrl;
+  const imageUrn = init.value?.image;
+  if (!uploadUrl || !imageUrn) {
+    throw new LinkedInApiError(502, "server_error", "image_init_missing_upload_url");
+  }
+
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${accessToken}`, "content-type": contentType },
+    body: bytes,
+  });
+
+  // O upload de imagem retorna 201 (ver doc); aceitamos qualquer 2xx.
+  if (!uploadResponse.ok) {
+    throw mapApiError(uploadResponse.status, await uploadResponse.text().catch(() => ""));
+  }
+
+  return imageUrn;
+}
+
 export type CreatePostResult = {
   postUrn: string;
   url: string;
 };
 
-// Publica um post só-texto no feed do membro. `authorUrn` = urn:li:person:{id}.
-export async function createMemberTextPost(accessToken: string, authorUrn: string, commentary: string): Promise<CreatePostResult> {
+// Publica um post no feed do membro (`authorUrn` = urn:li:person:{id}).
+// Com `media`, anexa a imagem já enviada (content.media.id = urn:li:image:...).
+export async function createMemberPost(
+  accessToken: string,
+  authorUrn: string,
+  commentary: string,
+  media?: { imageUrn: string; altText?: string },
+): Promise<CreatePostResult> {
+  const body: Record<string, unknown> = {
+    author: authorUrn,
+    commentary,
+    visibility: "PUBLIC",
+    distribution: {
+      feedDistribution: "MAIN_FEED",
+      targetEntities: [],
+      thirdPartyDistributionChannels: [],
+    },
+    lifecycleState: "PUBLISHED",
+    isReshareDisabledByAuthor: false,
+  };
+  if (media?.imageUrn) {
+    body.content = { media: { id: media.imageUrn, altText: (media.altText ?? "").slice(0, 4000) } };
+  }
+
   const response = await fetch(POSTS_URL, {
     method: "POST",
     headers: {
@@ -134,18 +201,7 @@ export async function createMemberTextPost(accessToken: string, authorUrn: strin
       "LinkedIn-Version": LINKEDIN_VERSION,
       "X-Restli-Protocol-Version": "2.0.0",
     },
-    body: JSON.stringify({
-      author: authorUrn,
-      commentary,
-      visibility: "PUBLIC",
-      distribution: {
-        feedDistribution: "MAIN_FEED",
-        targetEntities: [],
-        thirdPartyDistributionChannels: [],
-      },
-      lifecycleState: "PUBLISHED",
-      isReshareDisabledByAuthor: false,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (response.status !== 201) {

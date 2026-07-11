@@ -4,10 +4,11 @@ import { decryptSecret, encryptSecret } from "./crypto";
 import { sendTransactionalEmail } from "./email";
 import {
   ACCESS_TOKEN_TTL_SECONDS,
-  createMemberTextPost,
+  createMemberPost,
   fetchUserInfo,
   LinkedInApiError,
   LinkedInToken,
+  uploadImage,
 } from "./linkedin";
 import { prisma } from "./prisma";
 
@@ -18,11 +19,26 @@ const STALE_PUBLICATION_MINUTES = 15;
 // Avisa o cliente para reconectar quando faltar isso para o token de 60 dias expirar.
 const EXPIRY_WARNING_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Agendamento: no máximo 30 dias à frente (evita fila parada indefinidamente).
+const MAX_SCHEDULE_DAYS = 30;
 
 // LinkedIn (self-serve) limita o post a ~3000 caracteres de commentary.
 export const createPublicationSchema = z.object({
   commentary: z.string().min(1).max(3000),
   artifactId: z.string().min(1).optional(),
+  imageUrns: z.array(z.string()).max(1).optional(),
+  altText: z.string().max(1000).optional(),
+  // ISO datetime; publicar na hora marcada (futuro, ≤30d). Ausente = publicar já.
+  scheduledFor: z
+    .string()
+    .datetime()
+    .optional()
+    .refine((v) => {
+      if (!v) return true;
+      const t = new Date(v).getTime();
+      const now = Date.now();
+      return t > now + 60_000 && t <= now + MAX_SCHEDULE_DAYS * DAY_MS;
+    }, "scheduledFor precisa estar entre ~1 min e 30 dias no futuro"),
 });
 
 export class PublicationBlockedError extends Error {
@@ -103,10 +119,7 @@ export async function disconnectSocial(tenantId: string) {
   return getSocialConnectionStatus(tenantId);
 }
 
-// Enfileira uma publicação. `commentary` é o texto final que o usuário revisou e aprovou
-// (a ação explícita exigida pelos Termos da API do LinkedIn — nada é postado sozinho).
-export async function enqueuePublication(tenantId: string, input: unknown) {
-  const parsed = createPublicationSchema.parse(input);
+async function requireActiveConnection(tenantId: string) {
   const connection = await prisma.socialConnection.findUnique({ where: { tenantId_platform: { tenantId, platform: PLATFORM } } });
   if (!connection) {
     throw new PublicationBlockedError("not_connected");
@@ -114,6 +127,22 @@ export async function enqueuePublication(tenantId: string, input: unknown) {
   if (liveStatus(connection.status, connection.tokenExpiresAt) !== "ACTIVE") {
     throw new PublicationBlockedError("connection_expired");
   }
+  return connection;
+}
+
+// Faz upload de uma imagem para a conta LinkedIn do tenant e devolve o URN a anexar no post.
+// É feito na hora do request (não guardamos o binário): o URN vai para a fila.
+export async function uploadPublicationImage(tenantId: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  const connection = await requireActiveConnection(tenantId);
+  const accessToken = decryptSecret(connection.encryptedToken);
+  return uploadImage(accessToken, connection.externalUrn, bytes, contentType);
+}
+
+// Enfileira uma publicação. `commentary` é o texto final que o usuário revisou e aprovou
+// (a ação explícita exigida pelos Termos da API do LinkedIn — nada é postado sozinho).
+export async function enqueuePublication(tenantId: string, input: unknown) {
+  const parsed = createPublicationSchema.parse(input);
+  const connection = await requireActiveConnection(tenantId);
 
   return prisma.publication.create({
     data: {
@@ -123,9 +152,20 @@ export async function enqueuePublication(tenantId: string, input: unknown) {
       platform: PLATFORM,
       authorUrn: connection.externalUrn,
       commentary: parsed.commentary,
+      mediaImageUrns: parsed.imageUrns ?? [],
+      scheduledFor: parsed.scheduledFor ? new Date(parsed.scheduledFor) : null,
       status: "PENDING",
     },
   });
+}
+
+// Cancela uma publicação que ainda não saiu (agendada ou na fila).
+export async function cancelPublication(tenantId: string, publicationId: string) {
+  const result = await prisma.publication.updateMany({
+    where: { id: publicationId, tenantId, status: "PENDING" },
+    data: { status: "CANCELLED", error: null },
+  });
+  return result.count === 1;
 }
 
 export async function listPublications(tenantId: string, take = 10) {
@@ -140,6 +180,8 @@ export async function listPublications(tenantId: string, take = 10) {
       status: true,
       externalUrl: true,
       error: true,
+      mediaImageUrns: true,
+      scheduledFor: true,
       publishedAt: true,
       createdAt: true,
     },
@@ -185,7 +227,13 @@ export async function processNextPublication() {
 
   try {
     const accessToken = decryptSecret(connection.encryptedToken);
-    const result = await createMemberTextPost(accessToken, publication.authorUrn, publication.commentary);
+    const imageUrn = publication.mediaImageUrns[0];
+    const result = await createMemberPost(
+      accessToken,
+      publication.authorUrn,
+      publication.commentary,
+      imageUrn ? { imageUrn, altText: publication.commentary } : undefined,
+    );
     await prisma.publication.update({
       where: { id: publication.id },
       data: { status: "PUBLISHED", externalPostUrn: result.postUrn, externalUrl: result.url, publishedAt: new Date(), lockedAt: null },

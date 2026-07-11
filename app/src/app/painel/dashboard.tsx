@@ -51,7 +51,16 @@ type SocialState = {
   configured: boolean;
   connection: { connected: boolean; displayName: string | null; status: string | null; tokenExpiresAt: string | null; expiringSoon: boolean };
 };
-type PublicationRow = { id: string; commentary: string; status: string; externalUrl: string | null; error: string | null; createdAt: string };
+type PublicationRow = {
+  id: string;
+  commentary: string;
+  status: string;
+  externalUrl: string | null;
+  error: string | null;
+  mediaImageUrns: string[];
+  scheduledFor: string | null;
+  createdAt: string;
+};
 type LlmCredentialStatus = { configured: boolean; model: string | null; apiKeyPreview: string | null; trialActive: boolean; trialEndsAt: string | null };
 
 type Section = "criar" | "publicar" | "marca" | "conta";
@@ -89,6 +98,10 @@ export function Dashboard() {
   const [publishText, setPublishText] = useState("");
   const [publishArtifactId, setPublishArtifactId] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishImage, setPublishImage] = useState<File | null>(null);
+  const [publishImagePreview, setPublishImagePreview] = useState<string | null>(null);
+  const [scheduleOn, setScheduleOn] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
 
   const [deletePassword, setDeletePassword] = useState("");
   const [showDelete, setShowDelete] = useState(false);
@@ -186,11 +199,17 @@ export function Dashboard() {
   }, [ready, hasActiveJob, payload, loadJobs]);
 
   const hasPendingPub = useMemo(() => publications.some((p) => p.status === "PENDING" || p.status === "PUBLISHING"), [publications]);
+  // Acompanha (polling 5s) só publicações imediatas ou prestes a sair — não as agendadas p/ dias à frente.
+  // A comparação de tempo fica no effect (roda pós-render, onde Date.now é permitido).
   useEffect(() => {
-    if (!ready || !hasPendingPub) return;
+    if (!ready) return;
+    const imminent = publications.some(
+      (p) => p.status === "PUBLISHING" || (p.status === "PENDING" && (!p.scheduledFor || new Date(p.scheduledFor).getTime() <= Date.now() + 60_000)),
+    );
+    if (!imminent) return;
     const t = window.setTimeout(() => loadPublications().catch(() => null), 5000);
     return () => window.clearTimeout(t);
-  }, [ready, hasPendingPub, publications, loadPublications]);
+  }, [ready, publications, loadPublications]);
 
   const latestJob = payload?.jobs[0];
   const latestArtifact = latestJob?.artifacts?.[0];
@@ -316,27 +335,67 @@ export function Dashboard() {
       setStatus("LinkedIn desconectado.");
     }
   }
+  function resetPublishExtras() {
+    setPublishImage(null);
+    setPublishImagePreview(null);
+    setScheduleOn(false);
+    setScheduleAt("");
+  }
   function openPublish() {
     setPublishText(extractLinkedInSection(latestArtifact?.content ?? ""));
     setPublishArtifactId(latestArtifact?.id ?? null);
+    resetPublishExtras();
     setPublishOpen(true);
     setStatus(null);
   }
+  function pickImage(file: File | null) {
+    setPublishImage(file);
+    setPublishImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (scheduleOn && !scheduleAt) {
+      setStatus("Escolha a data e a hora para agendar.");
+      return;
+    }
     setIsPublishing(true);
-    setStatus("Enviando para o LinkedIn...");
+    setStatus(scheduleOn ? "Agendando publicação..." : "Enviando para o LinkedIn...");
     try {
-      const r = await fetch("/api/publications", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ commentary: publishText, artifactId: publishArtifactId ?? undefined }) });
+      const body = new FormData();
+      body.set("commentary", publishText);
+      if (publishArtifactId) body.set("artifactId", publishArtifactId);
+      if (publishImage) body.set("image", publishImage);
+      if (scheduleOn && scheduleAt) body.set("scheduledFor", new Date(scheduleAt).toISOString());
+      const r = await fetch("/api/publications", { method: "POST", body });
       const d = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(API_ERROR_MESSAGES[d?.error as string] ?? friendlyApiError(d, r.status, "Não foi possível publicar"));
+      if (!r.ok) {
+        const extra: Record<string, string> = {
+          image_too_large: "A imagem passa de 10 MB. Use uma menor.",
+          image_type_unsupported: "Formato não aceito. Use JPG, PNG ou GIF.",
+          image_upload_failed: "Não foi possível enviar a imagem ao LinkedIn. Tente de novo.",
+        };
+        throw new Error(extra[d?.error as string] ?? API_ERROR_MESSAGES[d?.error as string] ?? friendlyApiError(d, r.status, "Não foi possível publicar"));
+      }
       setPublishOpen(false);
+      resetPublishExtras();
       await loadPublications();
-      setStatus("Post na fila do LinkedIn — publica em instantes. Acompanhe em Publicar.");
+      setStatus(scheduleOn ? "Publicação agendada. Acompanhe em Publicar." : "Post na fila do LinkedIn — publica em instantes. Acompanhe em Publicar.");
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "Erro ao publicar.");
     } finally {
       setIsPublishing(false);
+    }
+  }
+  async function cancelPublication(id: string) {
+    const r = await fetch(`/api/publications?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (r.ok) {
+      await loadPublications();
+      setStatus("Publicação cancelada.");
+    } else {
+      setStatus("Não foi possível cancelar (talvez já tenha saído).");
     }
   }
 
@@ -460,6 +519,12 @@ export function Dashboard() {
               isPublishing={isPublishing}
               connectLinkedIn={connectLinkedIn}
               displayName={social?.connection.displayName ?? null}
+              imagePreview={publishImagePreview}
+              pickImage={pickImage}
+              scheduleOn={scheduleOn}
+              setScheduleOn={setScheduleOn}
+              scheduleAt={scheduleAt}
+              setScheduleAt={setScheduleAt}
             />
           )}
 
@@ -472,6 +537,7 @@ export function Dashboard() {
               publications={publications}
               hasPendingPub={hasPendingPub}
               hasArtifact={Boolean(latestArtifact)}
+              cancelPublication={cancelPublication}
               openPublish={() => {
                 setSection("criar");
                 openPublish();
@@ -535,6 +601,12 @@ function CriarSection(props: {
   isPublishing: boolean;
   connectLinkedIn: () => void;
   displayName: string | null;
+  imagePreview: string | null;
+  pickImage: (f: File | null) => void;
+  scheduleOn: boolean;
+  setScheduleOn: (v: boolean) => void;
+  scheduleAt: string;
+  setScheduleAt: (v: string) => void;
 }) {
   const { briefing, setBriefing, latestArtifact, latestJob } = props;
   return (
@@ -631,6 +703,12 @@ function PublishEditor(props: {
   connectLinkedIn: () => void;
   closePublish: () => void;
   displayName: string | null;
+  imagePreview: string | null;
+  pickImage: (f: File | null) => void;
+  scheduleOn: boolean;
+  setScheduleOn: (v: boolean) => void;
+  scheduleAt: string;
+  setScheduleAt: (v: string) => void;
 }) {
   if (!props.socialConfigured) {
     return <p className="mt-4 rounded-xl bg-[#0A1728] p-4 text-sm text-[#8FA3B8]">Publicação no LinkedIn ainda não habilitada nesta instância.</p>;
@@ -649,22 +727,55 @@ function PublishEditor(props: {
     <form className="mt-4 rounded-xl border border-[#0A66C2]/40 bg-[#0A1728] p-4" onSubmit={props.publish}>
       <p className="text-sm font-bold text-[#7DC8F5]">Revisar e publicar</p>
       <textarea
-        className="mt-3 min-h-52 w-full rounded-xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-sm leading-6 text-[#ECEFF4] outline-none focus:border-[#0A66C2]"
+        className="mt-3 min-h-44 w-full rounded-xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-sm leading-6 text-[#ECEFF4] outline-none focus:border-[#0A66C2]"
         value={props.publishText}
         onChange={(e) => props.setPublishText(e.target.value)}
         maxLength={3000}
         required
       />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs text-[#8FA3B8]">{props.publishText.length}/3000 · publica no perfil de {props.displayName ?? "você"}</span>
-        <div className="flex gap-2">
-          <button type="button" onClick={props.closePublish} className="rounded-full border border-white/20 px-4 py-2 text-sm font-bold text-[#D6D3C4]">
-            Cancelar
-          </button>
-          <button type="submit" disabled={props.isPublishing || !props.publishText.trim()} className="rounded-full bg-[#0A66C2] px-5 py-2 text-sm font-black text-white disabled:opacity-60">
-            {props.isPublishing ? "Publicando..." : "Publicar agora"}
-          </button>
-        </div>
+      <p className="mt-1 text-xs text-[#8FA3B8]">{props.publishText.length}/3000 · publica no perfil de {props.displayName ?? "você"}</p>
+
+      {/* Imagem (opcional) */}
+      <div className="mt-3">
+        {props.imagePreview ? (
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={props.imagePreview} alt="Prévia da imagem" className="h-16 w-16 rounded-lg object-cover" />
+            <button type="button" onClick={() => props.pickImage(null)} className="text-sm font-semibold text-[#D6D3C4] underline">
+              Remover imagem
+            </button>
+          </div>
+        ) : (
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-[#D6D3C4] hover:border-[#0A66C2]">
+            + Anexar imagem
+            <input type="file" accept="image/jpeg,image/png,image/gif" className="hidden" onChange={(e) => props.pickImage(e.target.files?.[0] ?? null)} />
+          </label>
+        )}
+      </div>
+
+      {/* Agendamento (opcional) */}
+      <div className="mt-3 space-y-2">
+        <label className="flex items-center gap-2 text-sm text-[#D6D3C4]">
+          <input type="checkbox" checked={props.scheduleOn} onChange={(e) => props.setScheduleOn(e.target.checked)} className="accent-[#0A66C2]" />
+          Agendar para depois
+        </label>
+        {props.scheduleOn && (
+          <input
+            type="datetime-local"
+            value={props.scheduleAt}
+            onChange={(e) => props.setScheduleAt(e.target.value)}
+            className="rounded-lg border border-white/10 bg-[#0C1A2E] px-3 py-2 text-sm text-[#ECEFF4] outline-none focus:border-[#0A66C2]"
+          />
+        )}
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" onClick={props.closePublish} className="rounded-full border border-white/20 px-4 py-2 text-sm font-bold text-[#D6D3C4]">
+          Cancelar
+        </button>
+        <button type="submit" disabled={props.isPublishing || !props.publishText.trim()} className="rounded-full bg-[#0A66C2] px-5 py-2 text-sm font-black text-white disabled:opacity-60">
+          {props.isPublishing ? (props.scheduleOn ? "Agendando..." : "Publicando...") : props.scheduleOn ? "Agendar" : "Publicar agora"}
+        </button>
       </div>
     </form>
   );
@@ -680,6 +791,7 @@ function PublicarSection(props: {
   publications: PublicationRow[];
   hasPendingPub: boolean;
   hasArtifact: boolean;
+  cancelPublication: (id: string) => void;
   openPublish: () => void;
 }) {
   const conn = props.social?.connection;
@@ -727,20 +839,34 @@ function PublicarSection(props: {
           <p className="mt-3 text-sm text-[#8FA3B8]">Nenhuma publicação ainda.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {props.publications.slice(0, 8).map((p) => (
-              <li key={p.id} className="rounded-xl border border-white/8 bg-[#0A1728] p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <StatusPill status={p.status} labels={PUBLICATION_STATUS_LABELS} tone={p.status === "FAILED" ? "bad" : p.status === "PUBLISHED" ? "good" : "wait"} />
-                  {p.externalUrl && p.status === "PUBLISHED" && (
-                    <a className="text-xs font-bold text-[#7DC8F5] underline" href={p.externalUrl} target="_blank" rel="noreferrer">
-                      ver no LinkedIn
-                    </a>
+            {props.publications.slice(0, 8).map((p) => {
+              const isScheduled = p.status === "PENDING" && Boolean(p.scheduledFor);
+              return (
+                <li key={p.id} className="rounded-xl border border-white/8 bg-[#0A1728] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      <StatusPill status={p.status} labels={PUBLICATION_STATUS_LABELS} tone={p.status === "FAILED" ? "bad" : p.status === "PUBLISHED" ? "good" : "wait"} />
+                      {p.mediaImageUrns.length > 0 && <span className="rounded-full bg-white/8 px-2 py-0.5 text-[11px] text-[#8FA3B8]">com imagem</span>}
+                    </span>
+                    {p.externalUrl && p.status === "PUBLISHED" && (
+                      <a className="text-xs font-bold text-[#7DC8F5] underline" href={p.externalUrl} target="_blank" rel="noreferrer">
+                        ver no LinkedIn
+                      </a>
+                    )}
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-sm text-[#D6D3C4]">{p.commentary}</p>
+                  {isScheduled && (
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="text-xs text-[#7DC8F5]">Agendado para {new Date(p.scheduledFor!).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                      <button type="button" onClick={() => props.cancelPublication(p.id)} className="text-xs font-semibold text-[#D6D3C4] underline">
+                        Cancelar
+                      </button>
+                    </div>
                   )}
-                </div>
-                <p className="mt-2 line-clamp-2 text-sm text-[#D6D3C4]">{p.commentary}</p>
-                {p.status === "FAILED" && p.error && <p className="mt-1 text-xs text-red-300">{publicationError(p.error)}</p>}
-              </li>
-            ))}
+                  {p.status === "FAILED" && p.error && <p className="mt-1 text-xs text-red-300">{publicationError(p.error)}</p>}
+                </li>
+              );
+            })}
           </ul>
         )}
         {props.hasPendingPub && <p className="mt-3 text-xs text-[#8FA3B8]">Publicações na fila são enviadas em instantes.</p>}
