@@ -75,7 +75,7 @@ export default function Home() {
             </p>
             <div className="mt-9 flex flex-col gap-4 sm:flex-row">
               <a className="rounded-full bg-[#F5A623] px-7 py-4 text-center font-bold text-[#071120] shadow-[0_0_32px_rgba(245,166,35,0.28)] transition hover:scale-[1.02]" href="#acesso">
-                Solicitar acesso
+                Começar teste grátis de 14 dias
               </a>
               <a className="rounded-full border border-[#2487D8]/50 px-7 py-4 text-center font-bold text-[#ECEFF4] transition hover:bg-[#142A42]" href="#produto">
                 O que o Cortex faz
@@ -143,9 +143,11 @@ export default function Home() {
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#2487D8]">Acesso ao produto</p>
-            <h2 className="mt-4 text-4xl font-black tracking-tight">Entre na sua conta ou solicite liberação para a sua marca.</h2>
+            <h2 className="mt-4 text-4xl font-black tracking-tight">Entre na sua conta ou comece seu teste de 14 dias.</h2>
             <p className="mt-5 leading-8 text-[#D6D3C4]">
-              O Cortex usa contas por tenant. Se você já recebeu acesso, faça login abaixo. Se ainda não tem conta, solicite onboarding para configurar marca, quota e usuários. No teste de 14 dias, você pode usar sua própria chave API; nos planos pagos, o LLM gerenciado pela Nutef já vem configurado.
+              O Cortex usa contas por marca (tenant). Se você já tem conta, faça login abaixo. Se ainda não tem, crie a
+              conta de teste de 14 dias direto no console — sem pagamento, usando a sua própria chave API — ou assine um
+              plano pago com Pix, em que o LLM gerenciado pela Nutef já vem configurado.
             </p>
             <div className="mt-8 rounded-[1.5rem] border border-[#F5A623]/20 bg-[#F5A623]/10 p-6 text-[#F9E6BC]">
               <h3 className="font-black">Self-service com Pix</h3>

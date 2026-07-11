@@ -6,9 +6,9 @@ export const metadata: Metadata = {
   description: "Como o Cortex (Nutef) coleta, usa e protege dados pessoais, em conformidade com a LGPD.",
 };
 
-const LAST_UPDATE = "14 de junho de 2026";
+const LAST_UPDATE = "10 de julho de 2026";
 const CONTROLLER = "Nutef — Núcleo de Tecnologias Futuras";
-const CONTACT_EMAIL = "privacidade@nutef.com"; // AJUSTAR: confirmar canal oficial de contato do encarregado.
+const CONTACT_EMAIL = "contato@nutef.com";
 
 export default function PrivacidadePage() {
   return (
@@ -34,7 +34,9 @@ export default function PrivacidadePage() {
           <h2 className="text-xl font-bold text-[#ECEFF4]">2. Quais dados coletamos</h2>
           <ul className="list-disc space-y-1 pl-6">
             <li><strong>Cadastro:</strong> nome, e-mail e senha (armazenada apenas como hash, nunca em texto puro).</li>
+            <li><strong>Pagamento:</strong> para assinaturas via Pix, nome, e-mail e, opcionalmente, telefone e CPF/CNPJ são compartilhados com o provedor de pagamento (Woovi/OpenPix) para emitir a cobrança. Não armazenamos dados de cartão.</li>
             <li><strong>Conteúdo de uso:</strong> perfil de voz da marca, briefings, temas, contexto e pacotes gerados.</li>
+            <li><strong>Chave de API própria (teste):</strong> se você usa o teste de 14 dias, sua chave de API fica armazenada apenas criptografada (AES-256-GCM) e expira automaticamente.</li>
             <li><strong>Operacionais:</strong> registros de uso, custo estimado, tokens, logs técnicos e endereço IP em eventos de segurança (ex.: limite de login).</li>
           </ul>
         </div>
@@ -51,21 +53,24 @@ export default function PrivacidadePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-[#ECEFF4]">4. Compartilhamento e subprocessadores de IA</h2>
+          <h2 className="text-xl font-bold text-[#ECEFF4]">4. Compartilhamento e subprocessadores</h2>
           <p>
             Para gerar conteúdo, o texto do seu briefing e o perfil de voz da marca são enviados a um
-            <strong> provedor de modelo de linguagem (IA)</strong> contratado por nós. Esse provedor processa os dados
-            apenas para retornar o resultado da geração. Não vendemos dados pessoais. Não usamos seu conteúdo para
-            treinar modelos próprios.
+            <strong> provedor de modelo de linguagem (IA)</strong> contratado por nós (ou, no teste de 14 dias, ao
+            provedor da sua própria chave de API). Esse provedor processa os dados apenas para retornar o resultado da
+            geração. Cobranças Pix são processadas pela <strong>Woovi/OpenPix</strong> e e-mails transacionais são
+            entregues por um relay SMTP contratado. Não vendemos dados pessoais. Não usamos seu conteúdo para treinar
+            modelos próprios.
           </p>
         </div>
 
         <div>
           <h2 className="text-xl font-bold text-[#ECEFF4]">5. Retenção</h2>
           <ul className="list-disc space-y-1 pl-6">
-            <li>Sessões de login expiram em 14 dias.</li>
+            <li>Sessões de login expiram em 14 dias e são removidas do banco após expirar.</li>
+            <li>Registros de e-mails transacionais são apagados após 90 dias.</li>
             <li>Backups do banco são mantidos por 7 dias.</li>
-            <li>Conteúdo e cadastro são mantidos enquanto a conta existir; após exclusão, removemos ou anonimizamos os dados, salvo obrigação legal de retenção.</li>
+            <li>Conteúdo e cadastro são mantidos enquanto a conta existir; após exclusão, removemos ou anonimizamos os dados, salvo obrigação legal de retenção (ex.: registros fiscais de pagamento, que permanecem no provedor de pagamento).</li>
           </ul>
         </div>
 
@@ -73,7 +78,9 @@ export default function PrivacidadePage() {
           <h2 className="text-xl font-bold text-[#ECEFF4]">6. Seus direitos (LGPD)</h2>
           <p>
             Você pode solicitar acesso, correção, portabilidade, anonimização ou exclusão dos seus dados, e revogar
-            consentimentos, escrevendo para <strong>{CONTACT_EMAIL}</strong>. Responderemos nos prazos da LGPD.
+            consentimentos, escrevendo para <strong>{CONTACT_EMAIL}</strong>. Responderemos nos prazos da LGPD. A{" "}
+            <strong>exclusão da conta</strong> também está disponível de forma autônoma no próprio console (seção
+            &quot;Excluir conta&quot;), removendo o cadastro e os dados da organização.
           </p>
         </div>
 

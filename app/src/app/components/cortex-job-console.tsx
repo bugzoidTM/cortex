@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Artifact = {
   id: string;
@@ -15,6 +15,8 @@ type SkillJob = {
   skill: string;
   status: string;
   createdAt: string;
+  error?: string | null;
+  output?: { status?: string } | null;
   artifacts?: Artifact[];
   briefing?: {
     title: string;
@@ -85,6 +87,74 @@ type LlmCredentialForm = {
   apiKey: string;
 };
 
+type BillingState = {
+  plan: string;
+  trial: { trialEndsAt: string } | null;
+  subscription: {
+    plan: string;
+    status: string;
+    amountCents: number;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    pendingInvoice: { paymentLinkUrl: string | null; expiresAt: string | null } | null;
+  } | null;
+};
+
+const API_ERROR_MESSAGES: Record<string, string> = {
+  invalid_credentials: "E-mail ou senha incorretos.",
+  invalid_input: "Dados inválidos — confira os campos preenchidos.",
+  rate_limited: "Muitas tentativas em sequência. Aguarde alguns minutos e tente de novo.",
+  auth_required: "Sua sessão expirou. Faça login novamente.",
+  quota_exceeded: "A quota mensal de tokens do seu plano acabou. Ela renova no próximo mês ou com upgrade de plano.",
+  job_input_token_limit_exceeded: "O briefing está longo demais para uma execução. Resuma o contexto e tente de novo.",
+  monthly_quota_exceeded: "A quota mensal de tokens do seu plano acabou.",
+  billing_blocked: "Sua assinatura está pendente ou vencida. Regularize o pagamento para continuar gerando.",
+  trial_requires_byok: "No teste de 14 dias, cadastre sua própria chave API (seção ao lado) antes de gerar conteúdo.",
+  trial_expired: "Seu teste de 14 dias terminou. Assine um plano pago para continuar usando o Cortex.",
+  email_already_registered: "Este e-mail já tem conta. Faça login ou use \"Esqueci minha senha\".",
+  email_or_company_already_exists: "Este e-mail já tem conta. Para retomar uma compra, use a mesma senha da conta.",
+  tenant_already_subscribed: "Esta conta já tem assinatura ativa. Fale com contato@nutef.com para mudar de plano.",
+  no_active_subscription: "Não há assinatura ativa para esta conta.",
+  woovi_not_configured: "Pagamentos indisponíveis no momento. Tente novamente em instantes.",
+};
+
+const JOB_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Na fila",
+  PROCESSING: "Gerando",
+  COMPLETED: "Concluído",
+  FAILED: "Falhou",
+  CANCELLED: "Cancelado",
+};
+
+const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Aguardando pagamento",
+  ACTIVE: "Ativa",
+  PAST_DUE: "Vencida",
+  CANCELED: "Cancelada",
+  INCOMPLETE: "Incompleta",
+};
+
+function friendlyApiError(payload: { error?: string } | null, httpStatus: number, fallback: string) {
+  const slug = payload?.error;
+  if (slug && API_ERROR_MESSAGES[slug]) {
+    return API_ERROR_MESSAGES[slug];
+  }
+  if (httpStatus === 429) {
+    return API_ERROR_MESSAGES.rate_limited;
+  }
+  return `${fallback} (erro ${slug ?? httpStatus}).`;
+}
+
+function friendlyJobError(error?: string | null) {
+  if (!error) return "erro não informado";
+  if (error.includes("http_401") || error.includes("http_403")) return "a chave API foi recusada pelo provider — confira a chave cadastrada";
+  if (error.includes("timeout")) return "o provider de IA demorou demais para responder";
+  if (error.includes("empty_openai_compatible")) return "o provider de IA devolveu resposta vazia";
+  if (error.startsWith("openai_compatible_http_")) return `o provider de IA respondeu com erro (${error.replace("openai_compatible_http_", "HTTP ")})`;
+  if (error.startsWith("worker_interrompido")) return "o processamento foi interrompido no meio";
+  return error;
+}
+
 const initialForm = {
   title: "Como usar IA para conteúdo local",
   objective: "Gerar pacote semanal de conteúdo para educar clientes e captar leads",
@@ -108,26 +178,68 @@ const initialLlmCredential: LlmCredentialForm = {
   apiKey: "",
 };
 
+const initialRegisterForm = { name: "", company: "", email: "", password: "" };
+
 export function CortexJobConsole() {
   const [form, setForm] = useState(initialForm);
   const [brandProfile, setBrandProfile] = useState(initialBrandProfile);
   const [llmCredentialForm, setLlmCredentialForm] = useState(initialLlmCredential);
   const [llmCredential, setLlmCredential] = useState<LlmCredentialStatus | null>(null);
   const [login, setLogin] = useState({ email: "", password: "" });
+  const [registerForm, setRegisterForm] = useState(initialRegisterForm);
+  const [authTab, setAuthTab] = useState<"login" | "register">("login");
   const [auth, setAuth] = useState<AuthState>({ authenticated: false });
   const [payload, setPayload] = useState<JobsPayload | null>(null);
+  const [billing, setBilling] = useState<BillingState | null>(null);
   const [status, setStatus] = useState("Verificando sessão segura...");
+  const [actionLink, setActionLink] = useState<{ href: string; label: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isBillingAction, setIsBillingAction] = useState(false);
 
-  const loadJobs = useCallback(async () => {
+  // Detecta a transição "gerando → terminou" entre atualizações do polling para
+  // anunciar o desfecho (sucesso, contingência ou falha) sem o cliente recarregar nada.
+  const wasGeneratingRef = useRef(false);
+
+  const loadJobs = useCallback(async (options?: { silent?: boolean }) => {
     const response = await fetch("/api/jobs", { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`Falha ao carregar jobs: ${response.status}`);
     }
     const data = (await response.json()) as JobsPayload;
     setPayload(data);
-    setStatus("Dados reais sincronizados com o banco.");
+
+    const active = data.jobs.some((job) => job.status === "PENDING" || job.status === "PROCESSING");
+    const latest = data.jobs[0];
+    if (options?.silent) {
+      if (wasGeneratingRef.current && !active && latest) {
+        if (latest.status === "COMPLETED") {
+          setStatus(
+            latest.output?.status === "fallback"
+              ? "Pacote entregue em modo de contingência (IA indisponível no momento) — sem consumo de quota."
+              : "Pacote pronto — confira o artifact abaixo.",
+          );
+        } else if (latest.status === "FAILED") {
+          setStatus(`A geração falhou: ${friendlyJobError(latest.error)}. Você pode tentar novamente.`);
+        }
+      }
+    } else {
+      setStatus("Dados sincronizados com o seu tenant.");
+    }
+    wasGeneratingRef.current = active;
+  }, []);
+
+  const loadBilling = useCallback(async () => {
+    const response = await fetch("/api/billing", { cache: "no-store" });
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    setBilling({ plan: data.plan, trial: data.trial, subscription: data.subscription });
   }, []);
 
   const loadBrandProfile = useCallback(async () => {
@@ -173,7 +285,8 @@ export function CortexJobConsole() {
     if (me.status === 401) {
       setAuth({ authenticated: false });
       setPayload(null);
-      setStatus("Faça login para acessar jobs reais do seu tenant.");
+      setBilling(null);
+      setStatus("Faça login ou crie sua conta de teste para acessar o console.");
       return;
     }
 
@@ -183,8 +296,8 @@ export function CortexJobConsole() {
 
     const session = await me.json();
     setAuth({ authenticated: true, email: session.user.email, tenantId: session.tenantId });
-    await Promise.all([loadBrandProfile(), loadLlmCredential(), loadJobs()]);
-  }, [loadBrandProfile, loadLlmCredential, loadJobs]);
+    await Promise.all([loadBrandProfile(), loadLlmCredential(), loadJobs(), loadBilling()]);
+  }, [loadBrandProfile, loadLlmCredential, loadJobs, loadBilling]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -196,9 +309,26 @@ export function CortexJobConsole() {
     return () => window.clearTimeout(timeout);
   }, [loadSessionAndJobs]);
 
+  const hasActiveJobs = useMemo(
+    () => (payload?.jobs ?? []).some((job) => job.status === "PENDING" || job.status === "PROCESSING"),
+    [payload],
+  );
+
+  // Enquanto houver job na fila/gerando, o console se atualiza sozinho a cada 5s.
+  useEffect(() => {
+    if (!auth.authenticated || !hasActiveJobs) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      loadJobs({ silent: true }).catch(() => null);
+    }, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [auth.authenticated, hasActiveJobs, payload, loadJobs]);
+
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoggingIn(true);
+    setActionLink(null);
     setStatus("Autenticando sessão segura...");
 
     try {
@@ -210,11 +340,11 @@ export function CortexJobConsole() {
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
-        throw new Error(errorPayload?.error ?? `Falha no login: ${response.status}`);
+        throw new Error(friendlyApiError(errorPayload, response.status, "Não foi possível fazer login"));
       }
 
       await loadSessionAndJobs();
-      setStatus("Login concluído. Console conectado ao tenant real.");
+      setStatus("Login concluído. Bem-vindo de volta.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao fazer login.");
     } finally {
@@ -222,10 +352,39 @@ export function CortexJobConsole() {
     }
   }
 
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsRegistering(true);
+    setActionLink(null);
+    setStatus("Criando sua conta de teste...");
+
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(registerForm),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(friendlyApiError(errorPayload, response.status, "Não foi possível criar a conta"));
+      }
+
+      await loadSessionAndJobs();
+      setStatus("Conta de teste criada. Cadastre sua chave API (seção Teste de 14 dias) para gerar o primeiro pacote.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao criar conta.");
+    } finally {
+      setIsRegistering(false);
+    }
+  }
+
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setAuth({ authenticated: false });
     setPayload(null);
+    setBilling(null);
+    setActionLink(null);
     setStatus("Sessão encerrada.");
   }
 
@@ -251,11 +410,11 @@ export function CortexJobConsole() {
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
-        throw new Error(errorPayload?.error ?? `Falha ao salvar voz da marca: ${response.status}`);
+        throw new Error(friendlyApiError(errorPayload, response.status, "Não foi possível salvar a voz da marca"));
       }
 
       await loadBrandProfile();
-      setStatus("Voz da marca salva no tenant real.");
+      setStatus("Voz da marca salva. As próximas gerações já usam este perfil.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao salvar voz da marca.");
     }
@@ -274,12 +433,12 @@ export function CortexJobConsole() {
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
-        throw new Error(errorPayload?.error ?? `Falha ao salvar chave LLM: ${response.status}`);
+        throw new Error(friendlyApiError(errorPayload, response.status, "Não foi possível salvar a chave"));
       }
 
       await loadLlmCredential();
       setLlmCredentialForm((current) => ({ ...current, apiKey: "" }));
-      setStatus("Sua própria chave API foi salva. Teste de 14 dias ativo para este tenant.");
+      setStatus("Chave API salva. Teste de 14 dias ativo — já dá para gerar o primeiro pacote.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao salvar chave LLM.");
     }
@@ -291,10 +450,10 @@ export function CortexJobConsole() {
       const response = await fetch("/api/llm-credential", { method: "DELETE" });
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
-        throw new Error(errorPayload?.error ?? `Falha ao remover chave LLM: ${response.status}`);
+        throw new Error(friendlyApiError(errorPayload, response.status, "Não foi possível remover a chave"));
       }
       await loadLlmCredential();
-      setStatus("Chave API removida. O tenant volta ao LLM gerenciado quando aplicável.");
+      setStatus("Chave API removida.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao remover chave LLM.");
     }
@@ -303,7 +462,8 @@ export function CortexJobConsole() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
-    setStatus("Criando briefing, job, artifact e ledger...");
+    setActionLink(null);
+    setStatus("Enviando briefing para a fila de geração...");
 
     try {
       const response = await fetch("/api/jobs", {
@@ -314,11 +474,14 @@ export function CortexJobConsole() {
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
-        throw new Error(errorPayload?.error ?? `Falha ao criar job: ${response.status}`);
+        if (errorPayload?.paymentLinkUrl) {
+          setActionLink({ href: errorPayload.paymentLinkUrl, label: "Pagar com Pix para regularizar" });
+        }
+        throw new Error(friendlyApiError(errorPayload, response.status, "Não foi possível criar o pacote"));
       }
 
-      await loadJobs();
-      setStatus("Pacote real criado e persistido com sucesso.");
+      await loadJobs({ silent: true });
+      setStatus("Pacote na fila — gerando com IA. O resultado aparece aqui em instantes.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao criar pacote.");
     } finally {
@@ -326,9 +489,72 @@ export function CortexJobConsole() {
     }
   }
 
+  async function handleBillingAction(action: "cancel" | "resume" | "regenerate_invoice") {
+    setIsBillingAction(true);
+    const messages = {
+      cancel: "Agendando cancelamento...",
+      resume: "Revertendo cancelamento...",
+      regenerate_invoice: "Gerando nova cobrança Pix...",
+    } as const;
+    setStatus(messages[action]);
+
+    try {
+      const response = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(friendlyApiError(data, response.status, "Não foi possível concluir a ação"));
+      }
+      await loadBilling();
+      if (action === "regenerate_invoice" && data?.paymentLinkUrl) {
+        setActionLink({ href: data.paymentLinkUrl, label: "Abrir cobrança Pix" });
+        setStatus("Nova cobrança Pix gerada.");
+      } else {
+        setStatus(action === "cancel" ? "Cancelamento agendado para o fim do período pago." : "Assinatura reativada.");
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro na ação de assinatura.");
+    } finally {
+      setIsBillingAction(false);
+    }
+  }
+
+  async function handleDeleteAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsDeleting(true);
+    setStatus("Excluindo conta e dados...");
+
+    try {
+      const response = await fetch("/api/auth/delete-account", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(friendlyApiError(data, response.status, "Não foi possível excluir a conta"));
+      }
+      setAuth({ authenticated: false });
+      setPayload(null);
+      setBilling(null);
+      setShowDeleteConfirm(false);
+      setDeletePassword("");
+      setStatus("Conta excluída. Seus dados foram removidos.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao excluir conta.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const latestJob = payload?.jobs[0];
   const latestArtifact = useMemo(() => latestJob?.artifacts?.[0], [latestJob]);
   const quotaStatus = payload?.quotaStatus;
+  const subscription = billing?.subscription;
+  const subscriptionBlocked = subscription && ["PENDING", "PAST_DUE", "INCOMPLETE"].includes(subscription.status);
 
   return (
     <div className="rounded-[2rem] border border-[#2487D8]/20 bg-[#071120] p-5 shadow-2xl shadow-black/30 lg:p-6">
@@ -339,10 +565,15 @@ export function CortexJobConsole() {
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#D6D3C4]">
             Acesse sua conta para editar a voz da marca, criar jobs de conteúdo e acompanhar histórico, quota e custo estimado do tenant.
           </p>
-          {auth.authenticated && <p className="mt-2 text-sm text-[#7DC8F5]">Sessão: {auth.email} · tenant {auth.tenantId}</p>}
+          {auth.authenticated && <p className="mt-2 text-sm text-[#7DC8F5]">Sessão: {auth.email}</p>}
         </div>
         <div className="flex flex-col items-end gap-2">
-          <span className="rounded-full bg-[#F5A623]/15 px-4 py-2 text-sm font-semibold text-[#F5A623]">{status}</span>
+          <span aria-live="polite" className="rounded-full bg-[#F5A623]/15 px-4 py-2 text-sm font-semibold text-[#F5A623]">{status}</span>
+          {actionLink && (
+            <a className="rounded-full bg-[#F5A623] px-4 py-2 text-sm font-black text-[#071120]" href={actionLink.href} target="_blank" rel="noreferrer">
+              {actionLink.label}
+            </a>
+          )}
           {auth.authenticated && (
             <button className="text-sm font-semibold text-[#D6D3C4] underline" onClick={handleLogout} type="button">
               Sair
@@ -352,36 +583,111 @@ export function CortexJobConsole() {
       </div>
 
       {!auth.authenticated ? (
-        <form className="grid gap-4 rounded-2xl border border-white/10 bg-[#0C1A2E] p-5 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleLogin}>
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">E-mail</span>
-            <input
-              className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
-              type="email"
-              value={login.email}
-              onChange={(event) => setLogin({ ...login, email: event.target.value })}
-              required
-            />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Senha</span>
-            <input
-              className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
-              type="password"
-              value={login.password}
-              onChange={(event) => setLogin({ ...login, password: event.target.value })}
-              minLength={8}
-              required
-            />
-          </label>
-          <button
-            className="rounded-full bg-[#F5A623] px-6 py-4 font-black text-[#071120] transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
-            type="submit"
-            disabled={isLoggingIn}
-          >
-            {isLoggingIn ? "Entrando..." : "Entrar no Cortex"}
-          </button>
-        </form>
+        <div className="rounded-2xl border border-white/10 bg-[#0C1A2E] p-5">
+          <div className="mb-5 flex gap-2">
+            <button
+              className={`rounded-full px-5 py-2 text-sm font-bold transition ${authTab === "login" ? "bg-[#F5A623] text-[#071120]" : "border border-white/15 text-[#D6D3C4]"}`}
+              type="button"
+              onClick={() => setAuthTab("login")}
+            >
+              Já tenho conta
+            </button>
+            <button
+              className={`rounded-full px-5 py-2 text-sm font-bold transition ${authTab === "register" ? "bg-[#F5A623] text-[#071120]" : "border border-white/15 text-[#D6D3C4]"}`}
+              type="button"
+              onClick={() => setAuthTab("register")}
+            >
+              Criar conta de teste (14 dias)
+            </button>
+          </div>
+
+          {authTab === "login" ? (
+            <form className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleLogin}>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">E-mail</span>
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                  type="email"
+                  value={login.email}
+                  onChange={(event) => setLogin({ ...login, email: event.target.value })}
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Senha</span>
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                  type="password"
+                  value={login.password}
+                  onChange={(event) => setLogin({ ...login, password: event.target.value })}
+                  minLength={8}
+                  required
+                />
+              </label>
+              <button
+                className="rounded-full bg-[#F5A623] px-6 py-4 font-black text-[#071120] transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+                type="submit"
+                disabled={isLoggingIn}
+              >
+                {isLoggingIn ? "Entrando..." : "Entrar no Cortex"}
+              </button>
+            </form>
+          ) : (
+            <form className="grid gap-4 md:grid-cols-2" onSubmit={handleRegister}>
+              <p className="md:col-span-2 text-sm leading-6 text-[#D6D3C4]">
+                Teste o Cortex por 14 dias sem pagar nada: você usa a sua própria chave API OpenAI-compatible. Sem cartão, sem Pix — só a chave, que fica criptografada e expira sozinha.
+              </p>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Seu nome</span>
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                  value={registerForm.name}
+                  onChange={(event) => setRegisterForm({ ...registerForm, name: event.target.value })}
+                  minLength={2}
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Empresa/marca</span>
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                  value={registerForm.company}
+                  onChange={(event) => setRegisterForm({ ...registerForm, company: event.target.value })}
+                  minLength={2}
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">E-mail</span>
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                  type="email"
+                  value={registerForm.email}
+                  onChange={(event) => setRegisterForm({ ...registerForm, email: event.target.value })}
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Senha (mínimo 12 caracteres)</span>
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4] outline-none transition focus:border-[#F5A623]"
+                  type="password"
+                  value={registerForm.password}
+                  onChange={(event) => setRegisterForm({ ...registerForm, password: event.target.value })}
+                  minLength={12}
+                  required
+                />
+              </label>
+              <button
+                className="md:col-span-2 rounded-full bg-[#F5A623] px-6 py-4 font-black text-[#071120] transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+                type="submit"
+                disabled={isRegistering}
+              >
+                {isRegistering ? "Criando conta..." : "Começar meu teste de 14 dias"}
+              </button>
+            </form>
+          )}
+        </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -432,9 +738,9 @@ export function CortexJobConsole() {
             <button
               className="w-full rounded-full bg-[#F5A623] px-6 py-4 font-black text-[#071120] transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || hasActiveJobs}
             >
-              {isSubmitting ? "Executando..." : "Executar pacote agora"}
+              {isSubmitting ? "Enviando..." : hasActiveJobs ? "Gerando pacote..." : "Executar pacote agora"}
             </button>
           </form>
 
@@ -557,17 +863,83 @@ export function CortexJobConsole() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-[#0C1A2E] p-4">
+              <h4 className="text-lg font-bold">Assinatura</h4>
+              {billing?.trial ? (
+                <div className="mt-3 space-y-2 text-sm text-[#D6D3C4]">
+                  <p>
+                    Teste gratuito ativo até <b className="text-[#F5A623]">{new Date(billing.trial.trialEndsAt).toLocaleDateString("pt-BR")}</b> — geração com a sua própria chave API.
+                  </p>
+                  <p>
+                    Para usar o LLM gerenciado pela Nutef e continuar depois do teste, assine pelo checkout Pix nesta página (use o mesmo e-mail e senha desta conta).
+                  </p>
+                </div>
+              ) : subscription ? (
+                <div className="mt-3 space-y-3 text-sm text-[#D6D3C4]">
+                  <p>
+                    Plano <b className="text-[#ECEFF4]">{subscription.plan}</b> · status{" "}
+                    <b className="text-[#F5A623]">{SUBSCRIPTION_STATUS_LABELS[subscription.status] ?? subscription.status}</b>
+                    {subscription.currentPeriodEnd && (
+                      <> · {subscription.status === "ACTIVE" ? "pago até" : "venceu em"} {new Date(subscription.currentPeriodEnd).toLocaleDateString("pt-BR")}</>
+                    )}
+                  </p>
+                  {subscription.cancelAtPeriodEnd && subscription.status === "ACTIVE" && (
+                    <p className="rounded-xl bg-[#F5A623]/10 p-3 text-[#F5A623]">
+                      Cancelamento agendado: o acesso termina no fim do período pago e nenhuma nova cobrança será gerada.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {subscription.pendingInvoice?.paymentLinkUrl && (
+                      <a className="rounded-full bg-[#F5A623] px-5 py-2 font-black text-[#071120]" href={subscription.pendingInvoice.paymentLinkUrl} target="_blank" rel="noreferrer">
+                        Pagar cobrança pendente
+                      </a>
+                    )}
+                    {subscriptionBlocked && !subscription.pendingInvoice && (
+                      <button className="rounded-full bg-[#F5A623] px-5 py-2 font-black text-[#071120] disabled:opacity-60" type="button" disabled={isBillingAction} onClick={() => handleBillingAction("regenerate_invoice")}>
+                        Gerar nova cobrança Pix
+                      </button>
+                    )}
+                    {subscription.status === "ACTIVE" && !subscription.cancelAtPeriodEnd && (
+                      <button className="rounded-full border border-white/20 px-5 py-2 font-bold text-[#D6D3C4] disabled:opacity-60" type="button" disabled={isBillingAction} onClick={() => handleBillingAction("cancel")}>
+                        Cancelar assinatura
+                      </button>
+                    )}
+                    {subscription.cancelAtPeriodEnd && subscription.status === "ACTIVE" && (
+                      <button className="rounded-full border border-[#F5A623]/40 px-5 py-2 font-bold text-[#F5A623] disabled:opacity-60" type="button" disabled={isBillingAction} onClick={() => handleBillingAction("resume")}>
+                        Manter assinatura
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#8FA3B8]">
+                    Arrependimento em até 7 dias da primeira compra (art. 49 do CDC): escreva para contato@nutef.com e devolvemos o valor via Pix.
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-[#D6D3C4]">Conta sem assinatura self-service (plano gerenciado pela Nutef).</p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#0C1A2E] p-4">
               <h4 className="text-lg font-bold">Jobs recentes</h4>
               <div className="mt-4 space-y-3">
                 {(payload?.jobs ?? []).slice(0, 4).map((job) => (
                   <div key={job.id} className="rounded-2xl border border-white/10 bg-[#142A42] p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-bold">{job.briefing?.title ?? job.skill}</p>
-                      <span className="rounded-full bg-[#2487D8]/15 px-3 py-1 text-xs font-bold text-[#7DC8F5]">{job.status}</span>
+                      <span className="flex items-center gap-2">
+                        {job.output?.status === "fallback" && (
+                          <span className="rounded-full bg-[#F5A623]/15 px-3 py-1 text-xs font-bold text-[#F5A623]">contingência</span>
+                        )}
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${job.status === "FAILED" ? "bg-red-500/15 text-red-300" : "bg-[#2487D8]/15 text-[#7DC8F5]"}`}>
+                          {JOB_STATUS_LABELS[job.status] ?? job.status}
+                        </span>
+                      </span>
                     </div>
                     <p className="mt-2 text-sm text-[#D6D3C4]">{job.briefing?.objective}</p>
+                    {job.status === "FAILED" && (
+                      <p className="mt-2 text-sm text-red-300">Motivo: {friendlyJobError(job.error)}.</p>
+                    )}
                     <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#7DC8F5]">
-                      {job.usageLedger?.[0]?.provider ?? "provider pendente"} · {job.usageLedger?.[0]?.outputTokens ?? 0} tokens saída
+                      {job.usageLedger?.[0]?.provider ?? "aguardando geração"} · {job.usageLedger?.[0]?.outputTokens ?? 0} tokens saída
                     </p>
                   </div>
                 ))}
@@ -578,8 +950,45 @@ export function CortexJobConsole() {
             <div className="rounded-2xl border border-[#F5A623]/20 bg-[#F5A623]/10 p-4">
               <h4 className="text-lg font-bold text-[#F5A623]">Artifact gerado</h4>
               <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-[#071120]/80 p-4 text-sm leading-6 text-[#F9E6BC]">
-                {latestArtifact?.content ?? "Crie um pacote para visualizar o markdown persistido."}
+                {latestArtifact?.content ??
+                  (hasActiveJobs
+                    ? "Gerando o pacote... o resultado aparece aqui sozinho."
+                    : latestJob?.status === "FAILED"
+                      ? `A última geração falhou: ${friendlyJobError(latestJob.error)}.`
+                      : "Crie um pacote para visualizar o markdown persistido.")}
               </pre>
+            </div>
+
+            <div className="rounded-2xl border border-red-500/20 bg-[#0C1A2E] p-4">
+              <h4 className="text-lg font-bold text-red-300">Excluir conta</h4>
+              <p className="mt-2 text-sm text-[#D6D3C4]">
+                Remove sua conta e todos os dados do tenant (voz da marca, briefings, jobs, artifacts). Ação irreversível.
+              </p>
+              {!showDeleteConfirm ? (
+                <button className="mt-3 rounded-full border border-red-400/40 px-5 py-2 text-sm font-bold text-red-300" type="button" onClick={() => setShowDeleteConfirm(true)}>
+                  Quero excluir minha conta
+                </button>
+              ) : (
+                <form className="mt-3 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end" onSubmit={handleDeleteAccount}>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-[#ECEFF4]">Confirme sua senha</span>
+                    <input
+                      className="w-full rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 text-[#ECEFF4]"
+                      type="password"
+                      value={deletePassword}
+                      onChange={(event) => setDeletePassword(event.target.value)}
+                      minLength={8}
+                      required
+                    />
+                  </label>
+                  <button className="rounded-full bg-red-500 px-5 py-3 font-black text-white disabled:opacity-60" type="submit" disabled={isDeleting}>
+                    {isDeleting ? "Excluindo..." : "Excluir definitivamente"}
+                  </button>
+                  <button className="rounded-full border border-white/20 px-5 py-3 font-bold text-[#D6D3C4]" type="button" onClick={() => setShowDeleteConfirm(false)}>
+                    Voltar
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>

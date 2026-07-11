@@ -41,11 +41,18 @@ export function SelfServiceCheckout() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error ?? `Falha no checkout: ${response.status}`);
+        const messages: Record<string, string> = {
+          rate_limited: "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+          invalid_input: "Confira os campos: nome, empresa, e-mail e senha (mínimo 12 caracteres) são obrigatórios.",
+          email_or_company_already_exists: "Este e-mail já tem conta. Para retomar a compra ou fazer upgrade, use a senha da conta existente.",
+          tenant_already_subscribed: "Esta conta já tem assinatura ativa. Para mudar de plano, escreva para contato@nutef.com.",
+          woovi_not_configured: "Pagamentos indisponíveis no momento. Tente novamente em instantes.",
+        };
+        throw new Error(messages[payload?.error as string] ?? `Não foi possível criar o checkout (erro ${payload?.error ?? response.status}).`);
       }
       setPaymentLinkUrl(payload.checkout.paymentLinkUrl);
       setBrCode(payload.checkout.brCode);
-      setStatus("Checkout criado. Pague com Pix; a liberação ocorre automaticamente quando a Woovi confirmar OPENPIX:CHARGE_COMPLETED.");
+      setStatus("Checkout criado. Pague com Pix — assim que o pagamento for confirmado, seu acesso é liberado automaticamente e você recebe um e-mail.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro ao criar checkout.");
     }

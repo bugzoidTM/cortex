@@ -6,9 +6,9 @@ export const metadata: Metadata = {
   description: "Termos de Uso do Cortex, plataforma de geração de pacotes de conteúdo da Nutef.",
 };
 
-const LAST_UPDATE = "14 de junho de 2026";
+const LAST_UPDATE = "10 de julho de 2026";
 const PROVIDER = "Nutef — Núcleo de Tecnologias Futuras";
-const CONTACT_EMAIL = "contato@nutef.com"; // AJUSTAR: confirmar canal oficial de contato.
+const CONTACT_EMAIL = "contato@nutef.com";
 
 export default function TermosPage() {
   return (
@@ -43,7 +43,10 @@ export default function TermosPage() {
           <h2 className="text-xl font-bold text-[#ECEFF4]">3. Conta e segurança</h2>
           <ul className="list-disc space-y-1 pl-6">
             <li>Você é responsável por manter suas credenciais em sigilo e pelas ações feitas na sua conta.</li>
-            <li>As contas atuais são criadas mediante convite/aprovação da Nutef (beta).</li>
+            <li>
+              Contas podem ser criadas de três formas: teste gratuito de 14 dias (com a sua própria chave de API),
+              assinatura self-service com pagamento via Pix, ou provisionamento direto pela Nutef.
+            </li>
             <li>Podemos suspender contas que violem estes Termos ou comprometam a segurança da plataforma.</li>
           </ul>
         </div>
@@ -70,13 +73,33 @@ export default function TermosPage() {
         <div>
           <h2 className="text-xl font-bold text-[#ECEFF4]">6. Planos, limites e custo</h2>
           <p>
-            O uso é sujeito a limites de plano (ex.: cota mensal de tokens e limite por execução). Durante o beta,
-            condições comerciais podem mudar com aviso prévio.
+            O uso é sujeito a limites de plano (ex.: cota mensal de tokens e limite por execução). A assinatura é
+            mensal, paga via Pix, com renovação por nova cobrança a cada ciclo. O não pagamento após o período de
+            carência suspende a geração de conteúdo até a regularização. Condições comerciais podem mudar com aviso prévio.
           </p>
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-[#ECEFF4]">7. Privacidade</h2>
+          <h2 className="text-xl font-bold text-[#ECEFF4]">7. Cancelamento, arrependimento e exclusão</h2>
+          <ul className="list-disc space-y-1 pl-6">
+            <li>
+              <strong>Cancelamento:</strong> você pode cancelar a assinatura a qualquer momento pelo console. O acesso
+              continua até o fim do período já pago e nenhuma nova cobrança é gerada.
+            </li>
+            <li>
+              <strong>Arrependimento (art. 49 do CDC):</strong> em até 7 dias corridos após a primeira contratação,
+              você pode desistir e receber a devolução integral do valor pago via Pix. Basta escrever para{" "}
+              <strong>{CONTACT_EMAIL}</strong>.
+            </li>
+            <li>
+              <strong>Exclusão de conta:</strong> disponível no próprio console (seção &quot;Excluir conta&quot;) ou por
+              solicitação ao nosso contato. A exclusão remove os dados da sua organização, conforme a Política de Privacidade.
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h2 className="text-xl font-bold text-[#ECEFF4]">8. Privacidade</h2>
           <p>
             O tratamento de dados pessoais segue nossa{" "}
             <Link href="/privacidade" className="font-semibold text-[#F5A623]">Política de Privacidade</Link>, incluindo o uso
@@ -85,7 +108,7 @@ export default function TermosPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-[#ECEFF4]">8. Garantias e limitação</h2>
+          <h2 className="text-xl font-bold text-[#ECEFF4]">9. Garantias e limitação</h2>
           <p>
             O serviço é fornecido &quot;como está&quot;, sem garantia de disponibilidade ininterrupta. Na máxima medida
             permitida em lei, a Nutef não responde por danos indiretos decorrentes do uso do conteúdo gerado.
@@ -93,7 +116,7 @@ export default function TermosPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-[#ECEFF4]">9. Contato e foro</h2>
+          <h2 className="text-xl font-bold text-[#ECEFF4]">10. Contato e foro</h2>
           <p>
             Dúvidas: <strong>{CONTACT_EMAIL}</strong>. Estes Termos são regidos pela legislação brasileira.
           </p>
