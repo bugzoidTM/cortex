@@ -28,6 +28,7 @@ model Tenant {
   paymentInvoices    PaymentInvoice[]
   socialConnections  SocialConnection[]
   publications       Publication[]
+  mediaAssets        MediaAsset[]
 }
 
 model TenantLlmCredential {
@@ -266,9 +267,9 @@ model Artifact {
 model SocialConnection {
   id                 String                 @id @default(cuid())
   tenantId           String
-  platform           String // "linkedin"
-  externalId         String // sub do OIDC (person id)
-  externalUrn        String // urn:li:person:{id}
+  platform           String // "linkedin" | "instagram"
+  externalId         String // LinkedIn: sub do OIDC · Instagram: IG user id
+  externalUrn        String // LinkedIn: urn:li:person:{id} · Instagram: IG user id
   displayName        String?
   scopes             String[]               @default([])
   encryptedToken     String // access token cifrado (AES-256-GCM)
@@ -291,10 +292,11 @@ model Publication {
   tenantId        String
   connectionId    String
   artifactId      String?
-  platform        String // "linkedin"
+  platform        String // "linkedin" | "instagram"
   authorUrn       String
   commentary      String // texto final aprovado pelo usuário (ação explícita)
-  mediaImageUrns  String[]          @default([])
+  mediaImageUrns  String[]          @default([]) // LinkedIn: URNs de imagem já enviados
+  mediaAssetId    String? // Instagram (e IA): imagem hospedada em /api/media/{id}
   status          PublicationStatus @default(PENDING)
   externalPostUrn String?
   externalUrl     String?
@@ -309,8 +311,24 @@ model Publication {
   tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   connection SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   artifact   Artifact?        @relation(fields: [artifactId], references: [id], onDelete: SetNull)
+  mediaAsset MediaAsset?      @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
 
   @@index([status, scheduledFor])
+  @@index([tenantId, createdAt])
+}
+
+// Imagem hospedada publicamente para o Instagram buscar por URL (a Meta faz cURL na
+// image_url). Guardamos o binário (JPEG) e servimos em /api/media/{id} (id = capability).
+model MediaAsset {
+  id        String   @id @default(cuid())
+  tenantId  String
+  mimeType  String
+  bytes     Bytes
+  createdAt DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  publications Publication[]
+
   @@index([tenantId, createdAt])
 }
 

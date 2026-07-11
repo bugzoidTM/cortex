@@ -4,6 +4,7 @@ import { prisma } from "./prisma";
 import { processNextContentPackageJob, reclaimStaleJobs } from "./cortex-mvp";
 import { runBillingRenewalCycle } from "./billing";
 import { processNextPublication, reclaimStalePublications, runSocialExpiryNoticeCycle } from "./social";
+import { pruneOldMediaAssets } from "./media";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const ALERT_THROTTLE_MS = 5 * 60 * 1000;
@@ -68,7 +69,7 @@ async function maybeRunSocialExpiryCycle() {
   lastSocialExpiryAt = now;
   try {
     const result = await runSocialExpiryNoticeCycle();
-    if (result.notified || result.markedExpired) {
+    if (result.notified || result.markedExpired || result.refreshed) {
       console.log(JSON.stringify({ event: "social_expiry_cycle", ...result }));
     }
   } catch (error) {
@@ -85,13 +86,14 @@ async function maybeRunRetentionCycle() {
   lastRetentionAt = now;
   try {
     const emailCutoff = new Date(now - EMAIL_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-    const [emails, sessions, rateEvents] = await Promise.all([
+    const [emails, sessions, rateEvents, media] = await Promise.all([
       prisma.emailMessage.deleteMany({ where: { createdAt: { lt: emailCutoff } } }),
       prisma.session.deleteMany({ where: { expiresAt: { lt: new Date(now - 24 * 60 * 60 * 1000) } } }),
       prisma.rateLimitEvent.deleteMany({ where: { createdAt: { lt: new Date(now - 24 * 60 * 60 * 1000) } } }),
+      pruneOldMediaAssets(new Date(now)),
     ]);
-    if (emails.count || sessions.count || rateEvents.count) {
-      console.log(JSON.stringify({ event: "retention_cycle", emails: emails.count, sessions: sessions.count, rateEvents: rateEvents.count }));
+    if (emails.count || sessions.count || rateEvents.count || media) {
+      console.log(JSON.stringify({ event: "retention_cycle", emails: emails.count, sessions: sessions.count, rateEvents: rateEvents.count, media }));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";

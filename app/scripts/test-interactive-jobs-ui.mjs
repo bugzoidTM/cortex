@@ -21,9 +21,11 @@ const requiredTexts = [
   "Contexto",
   "Gerações recentes",
   "Pacote gerado",
-  "Publicar no LinkedIn",
+  "LinkedIn e Instagram",
+  "Instagram",
   "/api/jobs",
   "/api/publications",
+  "/api/social",
 ];
 
 for (const text of requiredTexts) {

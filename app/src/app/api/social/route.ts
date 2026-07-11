@@ -1,6 +1,5 @@
 import { AuthRequiredError, requireCurrentSession } from "@/lib/auth";
-import { disconnectSocial, getSocialConnectionStatus } from "@/lib/social";
-import { isLinkedInConfigured } from "@/lib/linkedin";
+import { disconnectSocial, getSocialOverview, Platform } from "@/lib/social";
 
 export const dynamic = "force-dynamic";
 
@@ -11,20 +10,28 @@ function handle(error: unknown) {
   throw error;
 }
 
+function parsePlatform(value: string | null): Platform | null {
+  return value === "linkedin" || value === "instagram" ? value : null;
+}
+
 export async function GET() {
   try {
     const session = await requireCurrentSession();
-    const connection = await getSocialConnectionStatus(session.tenantId);
-    return Response.json({ ok: true, configured: isLinkedInConfigured(), connection });
+    const overview = await getSocialOverview(session.tenantId);
+    return Response.json({ ok: true, ...overview });
   } catch (error) {
     return handle(error);
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   try {
     const session = await requireCurrentSession();
-    const connection = await disconnectSocial(session.tenantId);
+    const platform = parsePlatform(new URL(request.url).searchParams.get("platform"));
+    if (!platform) {
+      return Response.json({ ok: false, error: "invalid_platform" }, { status: 400 });
+    }
+    const connection = await disconnectSocial(session.tenantId, platform);
     return Response.json({ ok: true, connection });
   } catch (error) {
     return handle(error);

@@ -6,40 +6,60 @@ import {
   ACCESS_TOKEN_TTL_SECONDS,
   createMemberPost,
   fetchUserInfo,
+  isLinkedInConfigured,
   LinkedInApiError,
   LinkedInToken,
   uploadImage,
 } from "./linkedin";
+import {
+  createImagePost,
+  fetchInstagramUsername,
+  IG_LONG_TOKEN_TTL_SECONDS,
+  InstagramApiError,
+  InstagramToken,
+  isInstagramConfigured,
+  refreshInstagramToken,
+} from "./instagram";
+import { getMediaAsset, publicMediaUrl } from "./media";
 import { prisma } from "./prisma";
 
-const PLATFORM = "linkedin";
+export type Platform = "linkedin" | "instagram";
+
 const MAX_PUBLISH_ATTEMPTS = 3;
 // Publicação presa em PUBLISHING além disso é órfã de um worker que morreu no meio.
 const STALE_PUBLICATION_MINUTES = 15;
-// Avisa o cliente para reconectar quando faltar isso para o token de 60 dias expirar.
+// LinkedIn não dá refresh no self-serve → avisamos para reconectar antes de expirar.
 const EXPIRY_WARNING_DAYS = 7;
+// Instagram tem refresh (token de 60d): renovamos quando faltam ≤15 dias.
+const IG_REFRESH_WHEN_DAYS_LEFT = 15;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Agendamento: no máximo 30 dias à frente (evita fila parada indefinidamente).
 const MAX_SCHEDULE_DAYS = 30;
+// Legenda: LinkedIn ~3000, Instagram ~2200.
+const IG_CAPTION_MAX = 2200;
 
-// LinkedIn (self-serve) limita o post a ~3000 caracteres de commentary.
-export const createPublicationSchema = z.object({
-  commentary: z.string().min(1).max(3000),
-  artifactId: z.string().min(1).optional(),
-  imageUrns: z.array(z.string()).max(1).optional(),
-  altText: z.string().max(1000).optional(),
-  // ISO datetime; publicar na hora marcada (futuro, ≤30d). Ausente = publicar já.
-  scheduledFor: z
-    .string()
-    .datetime()
-    .optional()
-    .refine((v) => {
-      if (!v) return true;
-      const t = new Date(v).getTime();
-      const now = Date.now();
-      return t > now + 60_000 && t <= now + MAX_SCHEDULE_DAYS * DAY_MS;
-    }, "scheduledFor precisa estar entre ~1 min e 30 dias no futuro"),
-});
+export const createPublicationSchema = z
+  .object({
+    platform: z.enum(["linkedin", "instagram"]).default("linkedin"),
+    commentary: z.string().min(1).max(3000),
+    artifactId: z.string().min(1).optional(),
+    // Imagem (anexada ou gerada por IA) hospedada como MediaAsset. Vale para as duas
+    // redes: no LinkedIn o worker faz upload do binário; no Instagram serve a URL pública.
+    mediaAssetId: z.string().min(1).optional(),
+    // ISO datetime; publicar na hora marcada (futuro, ≤30d). Ausente = publicar já.
+    scheduledFor: z
+      .string()
+      .datetime()
+      .optional()
+      .refine((v) => {
+        if (!v) return true;
+        const t = new Date(v).getTime();
+        const now = Date.now();
+        return t > now + 60_000 && t <= now + MAX_SCHEDULE_DAYS * DAY_MS;
+      }, "scheduledFor precisa estar entre ~1 min e 30 dias no futuro"),
+  })
+  .refine((d) => d.platform !== "instagram" || Boolean(d.mediaAssetId), { message: "instagram_requer_imagem", path: ["mediaAssetId"] })
+  .refine((d) => d.platform !== "instagram" || d.commentary.length <= IG_CAPTION_MAX, { message: "instagram_legenda_longa", path: ["commentary"] });
 
 export class PublicationBlockedError extends Error {
   constructor(public readonly reason: "not_connected" | "connection_expired") {
@@ -49,30 +69,14 @@ export class PublicationBlockedError extends Error {
 }
 
 export type PublicSocialConnection = {
+  platform: Platform;
+  configured: boolean;
   connected: boolean;
-  platform: string;
   displayName: string | null;
   status: string | null;
   tokenExpiresAt: Date | null;
   expiringSoon: boolean;
 };
-
-export async function getSocialConnectionStatus(tenantId: string): Promise<PublicSocialConnection> {
-  const connection = await prisma.socialConnection.findUnique({ where: { tenantId_platform: { tenantId, platform: PLATFORM } } });
-  if (!connection) {
-    return { connected: false, platform: PLATFORM, displayName: null, status: null, tokenExpiresAt: null, expiringSoon: false };
-  }
-
-  const live = liveStatus(connection.status, connection.tokenExpiresAt);
-  return {
-    connected: live === "ACTIVE",
-    platform: PLATFORM,
-    displayName: connection.displayName,
-    status: live,
-    tokenExpiresAt: connection.tokenExpiresAt,
-    expiringSoon: live === "ACTIVE" && connection.tokenExpiresAt.getTime() - Date.now() < EXPIRY_WARNING_DAYS * DAY_MS,
-  };
-}
 
 // Deriva o status vivo: um token vencido é EXPIRED mesmo que o banco ainda diga ACTIVE.
 function liveStatus(stored: string, tokenExpiresAt: Date) {
@@ -80,86 +84,126 @@ function liveStatus(stored: string, tokenExpiresAt: Date) {
   return stored;
 }
 
+function isConfigured(platform: Platform) {
+  return platform === "instagram" ? isInstagramConfigured() : isLinkedInConfigured();
+}
+
+async function connectionStatus(tenantId: string, platform: Platform): Promise<PublicSocialConnection> {
+  const connection = await prisma.socialConnection.findUnique({ where: { tenantId_platform: { tenantId, platform } } });
+  if (!connection) {
+    return { platform, configured: isConfigured(platform), connected: false, displayName: null, status: null, tokenExpiresAt: null, expiringSoon: false };
+  }
+  const live = liveStatus(connection.status, connection.tokenExpiresAt);
+  return {
+    platform,
+    configured: isConfigured(platform),
+    connected: live === "ACTIVE",
+    displayName: connection.displayName,
+    status: live,
+    tokenExpiresAt: connection.tokenExpiresAt,
+    expiringSoon: live === "ACTIVE" && connection.tokenExpiresAt.getTime() - Date.now() < EXPIRY_WARNING_DAYS * DAY_MS,
+  };
+}
+
+// Estado de todas as plataformas para o painel.
+export async function getSocialOverview(tenantId: string) {
+  const [linkedin, instagram] = await Promise.all([connectionStatus(tenantId, "linkedin"), connectionStatus(tenantId, "instagram")]);
+  return { linkedin, instagram };
+}
+
 export async function saveLinkedInConnection(tenantId: string, userId: string, token: LinkedInToken) {
   const info = await fetchUserInfo(token.accessToken);
   const tokenExpiresAt = new Date(Date.now() + (token.expiresInSeconds || ACCESS_TOKEN_TTL_SECONDS) * 1000);
-
-  await prisma.socialConnection.upsert({
-    where: { tenantId_platform: { tenantId, platform: PLATFORM } },
-    update: {
-      externalId: info.sub,
-      externalUrn: info.personUrn,
-      displayName: info.name ?? null,
-      scopes: token.scope.split(" ").filter(Boolean),
-      encryptedToken: encryptSecret(token.accessToken),
-      tokenExpiresAt,
-      status: "ACTIVE",
-      expiryNoticeSentAt: null,
-      connectedByUserId: userId,
-    },
-    create: {
-      tenantId,
-      platform: PLATFORM,
-      externalId: info.sub,
-      externalUrn: info.personUrn,
-      displayName: info.name ?? null,
-      scopes: token.scope.split(" ").filter(Boolean),
-      encryptedToken: encryptSecret(token.accessToken),
-      tokenExpiresAt,
-      status: "ACTIVE",
-      connectedByUserId: userId,
-    },
+  await upsertConnection(tenantId, "linkedin", {
+    externalId: info.sub,
+    externalUrn: info.personUrn,
+    displayName: info.name ?? null,
+    scopes: token.scope.split(" ").filter(Boolean),
+    accessToken: token.accessToken,
+    tokenExpiresAt,
+    userId,
   });
-
   return { displayName: info.name ?? null };
 }
 
-export async function disconnectSocial(tenantId: string) {
-  await prisma.socialConnection.deleteMany({ where: { tenantId, platform: PLATFORM } });
-  return getSocialConnectionStatus(tenantId);
+export async function saveInstagramConnection(tenantId: string, userId: string, token: InstagramToken) {
+  const username = await fetchInstagramUsername(token.accessToken, token.userId).catch(() => null);
+  const tokenExpiresAt = new Date(Date.now() + (token.expiresInSeconds || IG_LONG_TOKEN_TTL_SECONDS) * 1000);
+  await upsertConnection(tenantId, "instagram", {
+    externalId: token.userId,
+    externalUrn: token.userId,
+    displayName: username,
+    scopes: ["instagram_business_basic", "instagram_business_content_publish"],
+    accessToken: token.accessToken,
+    tokenExpiresAt,
+    userId,
+  });
+  return { displayName: username };
 }
 
-async function requireActiveConnection(tenantId: string) {
-  const connection = await prisma.socialConnection.findUnique({ where: { tenantId_platform: { tenantId, platform: PLATFORM } } });
-  if (!connection) {
-    throw new PublicationBlockedError("not_connected");
-  }
-  if (liveStatus(connection.status, connection.tokenExpiresAt) !== "ACTIVE") {
-    throw new PublicationBlockedError("connection_expired");
-  }
+async function upsertConnection(
+  tenantId: string,
+  platform: Platform,
+  data: { externalId: string; externalUrn: string; displayName: string | null; scopes: string[]; accessToken: string; tokenExpiresAt: Date; userId: string },
+) {
+  const common = {
+    externalId: data.externalId,
+    externalUrn: data.externalUrn,
+    displayName: data.displayName,
+    scopes: data.scopes,
+    encryptedToken: encryptSecret(data.accessToken),
+    tokenExpiresAt: data.tokenExpiresAt,
+    status: "ACTIVE" as const,
+    expiryNoticeSentAt: null,
+  };
+  await prisma.socialConnection.upsert({
+    where: { tenantId_platform: { tenantId, platform } },
+    update: common,
+    create: { tenantId, platform, connectedByUserId: data.userId, ...common },
+  });
+}
+
+export async function disconnectSocial(tenantId: string, platform: Platform) {
+  await prisma.socialConnection.deleteMany({ where: { tenantId, platform } });
+  return connectionStatus(tenantId, platform);
+}
+
+async function requireActiveConnection(tenantId: string, platform: Platform) {
+  const connection = await prisma.socialConnection.findUnique({ where: { tenantId_platform: { tenantId, platform } } });
+  if (!connection) throw new PublicationBlockedError("not_connected");
+  if (liveStatus(connection.status, connection.tokenExpiresAt) !== "ACTIVE") throw new PublicationBlockedError("connection_expired");
   return connection;
 }
 
-// Faz upload de uma imagem para a conta LinkedIn do tenant e devolve o URN a anexar no post.
-// É feito na hora do request (não guardamos o binário): o URN vai para a fila.
-export async function uploadPublicationImage(tenantId: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
-  const connection = await requireActiveConnection(tenantId);
-  const accessToken = decryptSecret(connection.encryptedToken);
-  return uploadImage(accessToken, connection.externalUrn, bytes, contentType);
-}
-
-// Enfileira uma publicação. `commentary` é o texto final que o usuário revisou e aprovou
-// (a ação explícita exigida pelos Termos da API do LinkedIn — nada é postado sozinho).
+// Enfileira uma publicação. O texto é o final que o usuário revisou e aprovou (ação
+// explícita); nada é postado sozinho. Instagram exige uma imagem (mediaAssetId).
 export async function enqueuePublication(tenantId: string, input: unknown) {
   const parsed = createPublicationSchema.parse(input);
-  const connection = await requireActiveConnection(tenantId);
+  const platform = parsed.platform as Platform;
+  const connection = await requireActiveConnection(tenantId, platform);
+
+  // A imagem hospedada (Instagram/IA) precisa pertencer ao tenant.
+  if (parsed.mediaAssetId) {
+    const owned = await prisma.mediaAsset.findFirst({ where: { id: parsed.mediaAssetId, tenantId }, select: { id: true } });
+    if (!owned) throw new PublicationBlockedError("not_connected");
+  }
 
   return prisma.publication.create({
     data: {
       tenantId,
       connectionId: connection.id,
       artifactId: parsed.artifactId ?? null,
-      platform: PLATFORM,
+      platform,
       authorUrn: connection.externalUrn,
       commentary: parsed.commentary,
-      mediaImageUrns: parsed.imageUrns ?? [],
+      mediaImageUrns: [],
+      mediaAssetId: parsed.mediaAssetId ?? null,
       scheduledFor: parsed.scheduledFor ? new Date(parsed.scheduledFor) : null,
       status: "PENDING",
     },
   });
 }
 
-// Cancela uma publicação que ainda não saiu (agendada ou na fila).
 export async function cancelPublication(tenantId: string, publicationId: string) {
   const result = await prisma.publication.updateMany({
     where: { id: publicationId, tenantId, status: "PENDING" },
@@ -181,6 +225,7 @@ export async function listPublications(tenantId: string, take = 10) {
       externalUrl: true,
       error: true,
       mediaImageUrns: true,
+      mediaAssetId: true,
       scheduledFor: true,
       publishedAt: true,
       createdAt: true,
@@ -218,41 +263,58 @@ export async function processNextPublication() {
 
   const connection = await prisma.socialConnection.findUnique({ where: { id: publication.connectionId } });
   if (!connection || liveStatus(connection.status, connection.tokenExpiresAt) !== "ACTIVE") {
-    await prisma.publication.update({
-      where: { id: publication.id },
-      data: { status: "FAILED", lockedAt: null, error: "conexao_expirada_reconecte" },
-    });
+    await prisma.publication.update({ where: { id: publication.id }, data: { status: "FAILED", lockedAt: null, error: "conexao_expirada_reconecte" } });
     return { id: publication.id, status: "FAILED" as const };
   }
 
   try {
     const accessToken = decryptSecret(connection.encryptedToken);
-    const imageUrn = publication.mediaImageUrns[0];
-    const result = await createMemberPost(
-      accessToken,
-      publication.authorUrn,
-      publication.commentary,
-      imageUrn ? { imageUrn, altText: publication.commentary } : undefined,
-    );
+    let externalPostUrn = "";
+    let externalUrl = "";
+
+    if (connection.platform === "instagram") {
+      if (!publication.mediaAssetId) throw new Error("instagram_sem_imagem");
+      const imageUrl = publicMediaUrl(publication.mediaAssetId);
+      const result = await createImagePost(accessToken, connection.externalId, imageUrl, publication.commentary);
+      externalPostUrn = result.mediaId;
+      externalUrl = result.url;
+    } else {
+      // LinkedIn: se houver imagem, faz upload do binário agora e usa o URN no post.
+      let media: { imageUrn: string; altText: string } | undefined;
+      if (publication.mediaAssetId) {
+        const asset = await getMediaAsset(publication.mediaAssetId);
+        if (asset) {
+          const ab = asset.bytes.buffer.slice(asset.bytes.byteOffset, asset.bytes.byteOffset + asset.bytes.byteLength) as ArrayBuffer;
+          const imageUrn = await uploadImage(accessToken, publication.authorUrn, ab, asset.mimeType);
+          media = { imageUrn, altText: publication.commentary.slice(0, 300) };
+        }
+      }
+      const result = await createMemberPost(accessToken, publication.authorUrn, publication.commentary, media);
+      externalPostUrn = result.postUrn;
+      externalUrl = result.url;
+    }
+
     await prisma.publication.update({
       where: { id: publication.id },
-      data: { status: "PUBLISHED", externalPostUrn: result.postUrn, externalUrl: result.url, publishedAt: new Date(), lockedAt: null },
+      data: { status: "PUBLISHED", externalPostUrn, externalUrl, publishedAt: new Date(), lockedAt: null },
     });
-    return { id: publication.id, status: "PUBLISHED" as const, url: result.url };
+    return { id: publication.id, status: "PUBLISHED" as const, url: externalUrl };
   } catch (error) {
     return handlePublishError(publication.id, publication.attempts, connection.id, error);
   }
 }
 
 async function handlePublishError(publicationId: string, attempts: number, connectionId: string, error: unknown) {
-  // Token expirado/revogado: marca a conexão para o cliente reconectar; nem adianta tentar de novo.
-  if (error instanceof LinkedInApiError && error.reason === "token_expired") {
+  const expired = error instanceof LinkedInApiError && error.reason === "token_expired";
+  const igExpired = error instanceof InstagramApiError && error.reason === "token_expired";
+  if (expired || igExpired) {
     await prisma.socialConnection.update({ where: { id: connectionId }, data: { status: "EXPIRED" } });
     await prisma.publication.update({ where: { id: publicationId }, data: { status: "FAILED", lockedAt: null, error: "conexao_expirada_reconecte" } });
     return { id: publicationId, status: "FAILED" as const };
   }
-  if (error instanceof LinkedInApiError && error.reason === "forbidden") {
-    await prisma.publication.update({ where: { id: publicationId }, data: { status: "FAILED", lockedAt: null, error: "permissao_negada_linkedin" } });
+  const forbidden = (error instanceof LinkedInApiError || error instanceof InstagramApiError) && error.reason === "forbidden";
+  if (forbidden) {
+    await prisma.publication.update({ where: { id: publicationId }, data: { status: "FAILED", lockedAt: null, error: "permissao_negada" } });
     return { id: publicationId, status: "FAILED" as const };
   }
 
@@ -269,37 +331,62 @@ async function handlePublishError(publicationId: string, attempts: number, conne
   return { id: publicationId, status: canRetry ? ("PENDING" as const) : ("FAILED" as const) };
 }
 
-// Avisa (uma vez) o titular quando a conexão está perto de expirar — não há refresh no
-// self-serve do LinkedIn, então o cliente precisa reconectar manualmente a cada ~60 dias.
+// Ciclo periódico: renova tokens do Instagram (tem refresh) e avisa reconexão do
+// LinkedIn (não tem). Marca EXPIRED quem já venceu.
 export async function runSocialExpiryNoticeCycle(now = new Date()) {
-  const threshold = new Date(now.getTime() + EXPIRY_WARNING_DAYS * DAY_MS);
-  const expiring = await prisma.socialConnection.findMany({
-    where: { status: "ACTIVE", tokenExpiresAt: { lte: threshold, gt: now }, expiryNoticeSentAt: null },
-    include: { tenant: { include: { memberships: { include: { user: true }, take: 1 } } } },
+  let refreshed = 0;
+  let notified = 0;
+
+  // Instagram: renova tokens que estão perto de expirar (≤15 dias). O token, nesse
+  // ponto, tem ~45 dias de idade — bem acima do mínimo de 24h exigido pelo refresh.
+  const igThreshold = new Date(now.getTime() + IG_REFRESH_WHEN_DAYS_LEFT * DAY_MS);
+  const igExpiring = await prisma.socialConnection.findMany({
+    where: { platform: "instagram", status: "ACTIVE", tokenExpiresAt: { lte: igThreshold, gt: now } },
     take: 100,
   });
+  for (const conn of igExpiring) {
+    try {
+      const fresh = await refreshInstagramToken(decryptSecret(conn.encryptedToken));
+      await prisma.socialConnection.update({
+        where: { id: conn.id },
+        data: { encryptedToken: encryptSecret(fresh.accessToken), tokenExpiresAt: new Date(now.getTime() + fresh.expiresInSeconds * 1000), expiryNoticeSentAt: null },
+      });
+      refreshed += 1;
+    } catch (error) {
+      // Refresh falhou (token revogado?) → marca EXPIRED e pede reconexão.
+      await prisma.socialConnection.update({ where: { id: conn.id }, data: { status: "EXPIRED" } });
+      await notifyReconnect(conn.tenantId, conn.id, "instagram", conn.tokenExpiresAt);
+      console.error(JSON.stringify({ event: "ig_refresh_failed", connectionId: conn.id, error: error instanceof Error ? error.message : "unknown" }));
+    }
+  }
 
-  let notified = 0;
-  for (const connection of expiring) {
-    const owner = connection.tenant.memberships[0]?.user;
-    if (!owner) continue;
-    const dateStr = connection.tokenExpiresAt.toLocaleDateString("pt-BR");
-    await sendTransactionalEmail({
-      to: owner.email,
-      userId: owner.id,
-      subject: "Reconecte seu LinkedIn no Cortex",
-      text: `Sua conexão do LinkedIn com o Cortex expira em ${dateStr}. Para continuar publicando, reconecte em https://cortex.nutef.com/#acesso (leva 1 clique). O LinkedIn exige reautorização periódica por segurança.`,
-      html: `<p>Sua conexão do LinkedIn com o Cortex expira em <b>${dateStr}</b>.</p><p>Para continuar publicando, <a href="https://cortex.nutef.com/#acesso">reconecte no console</a> — leva 1 clique. O LinkedIn exige reautorização periódica por segurança.</p>`,
-    }).catch(() => null);
-    await prisma.socialConnection.update({ where: { id: connection.id }, data: { expiryNoticeSentAt: now } });
+  // LinkedIn: sem refresh no self-serve → avisa (uma vez) para reconectar.
+  const liThreshold = new Date(now.getTime() + EXPIRY_WARNING_DAYS * DAY_MS);
+  const liExpiring = await prisma.socialConnection.findMany({
+    where: { platform: "linkedin", status: "ACTIVE", tokenExpiresAt: { lte: liThreshold, gt: now }, expiryNoticeSentAt: null },
+    take: 100,
+  });
+  for (const conn of liExpiring) {
+    await notifyReconnect(conn.tenantId, conn.id, "linkedin", conn.tokenExpiresAt);
     notified += 1;
   }
 
-  // Marca como EXPIRED quem já passou do prazo (para a UI mostrar o estado correto).
-  const expired = await prisma.socialConnection.updateMany({
-    where: { status: "ACTIVE", tokenExpiresAt: { lte: now } },
-    data: { status: "EXPIRED" },
-  });
+  const expired = await prisma.socialConnection.updateMany({ where: { status: "ACTIVE", tokenExpiresAt: { lte: now } }, data: { status: "EXPIRED" } });
+  return { refreshed, notified, markedExpired: expired.count };
+}
 
-  return { notified, markedExpired: expired.count };
+async function notifyReconnect(tenantId: string, connectionId: string, platform: Platform, tokenExpiresAt: Date) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { memberships: { include: { user: true }, take: 1 } } });
+  const owner = tenant?.memberships[0]?.user;
+  if (!owner) return;
+  const label = platform === "instagram" ? "Instagram" : "LinkedIn";
+  const dateStr = tokenExpiresAt.toLocaleDateString("pt-BR");
+  await sendTransactionalEmail({
+    to: owner.email,
+    userId: owner.id,
+    subject: `Reconecte seu ${label} no Cortex`,
+    text: `Sua conexão do ${label} com o Cortex expira em ${dateStr}. Para continuar publicando, reconecte em https://cortex.nutef.com/painel (leva 1 clique).`,
+    html: `<p>Sua conexão do ${label} com o Cortex expira em <b>${dateStr}</b>.</p><p>Para continuar publicando, <a href="https://cortex.nutef.com/painel">reconecte no painel</a> — leva 1 clique.</p>`,
+  }).catch(() => null);
+  await prisma.socialConnection.update({ where: { id: connectionId }, data: { expiryNoticeSentAt: new Date() } });
 }

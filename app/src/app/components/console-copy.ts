@@ -17,8 +17,12 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   tenant_already_subscribed: "Esta conta já tem assinatura ativa. Escreva para contato@nutef.com para mudar de plano.",
   no_active_subscription: "Não há assinatura ativa nesta conta.",
   woovi_not_configured: "Pagamentos indisponíveis no momento. Tente novamente em instantes.",
-  not_connected: "Conecte seu LinkedIn antes de publicar.",
-  connection_expired: "Sua conexão do LinkedIn expirou — reconecte para publicar.",
+  not_connected: "Conecte a rede social antes de publicar.",
+  connection_expired: "Sua conexão expirou — reconecte para publicar.",
+  invalid_platform: "Rede social inválida.",
+  instagram_requer_imagem: "O Instagram exige uma imagem na publicação.",
+  instagram_legenda_longa: "A legenda do Instagram vai até 2200 caracteres.",
+  instagram_formato_invalido: "O Instagram aceita imagem só em JPEG.",
 };
 
 export const GENERATION_STATUS_LABELS: Record<string, string> = {
@@ -49,12 +53,18 @@ export const SOCIAL_QUERY_MESSAGES: Record<string, string> = {
   linkedin_conectado: "LinkedIn conectado com sucesso.",
   linkedin_erro: "Não foi possível conectar o LinkedIn. Tente novamente.",
   linkedin_negado: "Conexão com o LinkedIn cancelada.",
+  instagram_conectado: "Instagram conectado com sucesso.",
+  instagram_erro: "Não foi possível conectar o Instagram. Tente novamente.",
+  instagram_negado: "Conexão com o Instagram cancelada.",
 };
 
 const PUBLICATION_ERROR_MESSAGES: Record<string, string> = {
-  conexao_expirada_reconecte: "a conexão do LinkedIn expirou — reconecte para publicar",
+  conexao_expirada_reconecte: "a conexão expirou — reconecte para publicar",
+  permissao_negada: "a rede social recusou a permissão de publicação",
   permissao_negada_linkedin: "o LinkedIn recusou a permissão de publicação",
+  instagram_sem_imagem: "a publicação do Instagram ficou sem imagem",
   worker_interrompido_sem_tentativas: "o processamento foi interrompido",
+  worker_interrompido_reprocessando: "o processamento foi retomado",
 };
 
 export function publicationError(error?: string | null) {

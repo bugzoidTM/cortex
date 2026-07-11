@@ -9,7 +9,7 @@ const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 function redirectToConsole(status: "linkedin_conectado" | "linkedin_erro" | "linkedin_negado") {
   const base = process.env.CORTEX_PUBLIC_URL ?? "https://cortex.nutef.com";
-  return Response.redirect(`${base}/?social=${status}#acesso`, 302);
+  return Response.redirect(`${base}/painel?social=${status}`, 302);
 }
 
 // Callback do OAuth: valida o state assinado, confirma a sessão e o tenant, troca o
