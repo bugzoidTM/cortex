@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const routePath = join(root, "src/app/api/brand-profile/route.ts");
-const componentPath = join(root, "src/app/components/cortex-job-console.tsx");
+const componentPath = join(root, "src/app/painel/dashboard.tsx");
 
 assert.ok(existsSync(routePath), "Rota /api/brand-profile precisa existir");
 const route = readFileSync(routePath, "utf8");
@@ -13,7 +13,7 @@ for (const text of ["requireCurrentSession", "GET", "PUT", "tenantId", "tone", "
 }
 
 const component = readFileSync(componentPath, "utf8");
-for (const text of ["Voz da marca", "/api/brand-profile", "Tom da marca", "Público", "Promessa", "Restrições", "Salvar voz da marca"]) {
+for (const text of ["Voz da marca", "/api/brand-profile", "Tom", "Público", "Promessa", "Restrições", "Salvar voz da marca"]) {
   assert.ok(component.includes(text), `UI sem controle real de brand profile: ${text}`);
 }
 

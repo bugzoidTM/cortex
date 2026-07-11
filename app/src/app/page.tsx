@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CortexJobConsole } from "./components/cortex-job-console";
+import { AuthCard } from "./components/auth-card";
 import { SelfServiceCheckout } from "./components/self-service-checkout";
 
 const outcomes = [
@@ -55,7 +55,7 @@ export default function Home() {
             <a className="hover:text-[#F5A623]" href="#planos">Planos</a>
           </nav>
           <a
-            href="#acesso"
+            href="/painel"
             className="rounded-full border border-[#F5A623]/40 px-5 py-2 text-sm font-semibold text-[#F5A623] transition hover:bg-[#F5A623] hover:text-[#071120]"
           >
             Entrar no Cortex
@@ -155,8 +155,8 @@ export default function Home() {
             </div>
           </div>
           <div className="grid gap-6">
+            <AuthCard />
             <SelfServiceCheckout />
-            <CortexJobConsole />
           </div>
         </div>
       </section>

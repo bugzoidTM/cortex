@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const page = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
-const consoleComponent = readFileSync(join(process.cwd(), "src/app/components/cortex-job-console.tsx"), "utf8");
+const authCard = readFileSync(join(process.cwd(), "src/app/components/auth-card.tsx"), "utf8");
 const checkoutComponent = readFileSync(join(process.cwd(), "src/app/components/self-service-checkout.tsx"), "utf8");
 const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8");
-const publicCopy = `${page}\n${consoleComponent}\n${checkoutComponent}\n${layout}`;
+const publicCopy = `${page}\n${authCard}\n${checkoutComponent}\n${layout}`;
 
 const requiredTexts = [
   "O que o Cortex faz",
@@ -14,7 +14,7 @@ const requiredTexts = [
   "Planos e acesso",
   "Entrar no Cortex",
   "Começar teste grátis de 14 dias",
-  "Criar conta de teste (14 dias)",
+  "Testar 14 dias grátis",
   "Pacote de conteúdo com IA",
   "Voz da marca",
   "Controle de consumo",

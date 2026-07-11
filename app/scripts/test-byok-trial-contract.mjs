@@ -7,7 +7,7 @@ const schemaPath = join(root, "prisma/schema.prisma");
 const gatewayPath = join(root, "src/lib/llm-gateway.ts");
 const credentialLibPath = join(root, "src/lib/tenant-llm-credential.ts");
 const credentialRoutePath = join(root, "src/app/api/llm-credential/route.ts");
-const uiPath = join(root, "src/app/components/cortex-job-console.tsx");
+const uiPath = join(root, "src/app/painel/dashboard.tsx");
 const adminPath = join(root, "src/lib/admin.ts");
 const pagePath = join(root, "src/app/page.tsx");
 const packagePath = join(root, "package.json");
@@ -18,7 +18,7 @@ for (const [path, message] of [
   [gatewayPath, "gateway LLM precisa existir"],
   [credentialLibPath, "lib de credencial BYOK precisa existir"],
   [credentialRoutePath, "rota /api/llm-credential precisa existir"],
-  [uiPath, "console do cliente precisa existir"],
+  [uiPath, "painel do cliente precisa existir"],
   [adminPath, "admin precisa existir"],
   [pagePath, "homepage precisa existir"],
   [docsPath, "documentação dos planos pagos precisa existir"],
@@ -58,8 +58,8 @@ for (const text of ["getActiveTenantLlmCredential", "credential?.apiKey", "crede
 }
 
 const ui = readFileSync(uiPath, "utf8");
-for (const text of ["/api/llm-credential", "Teste de 14 dias", "Sua própria chave API", "apiKeyPreview", "trialEndsAt"]) {
-  assert.ok(ui.includes(text), `console deve expor configuração BYOK: ${text}`);
+for (const text of ["/api/llm-credential", "teste de 14 dias", "Sua chave de API", "apiKeyPreview", "trialEndsAt"]) {
+  assert.ok(ui.includes(text), `painel deve expor configuração BYOK: ${text}`);
 }
 
 const admin = readFileSync(adminPath, "utf8");

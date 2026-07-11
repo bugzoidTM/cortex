@@ -3,27 +3,39 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
-const componentPath = join(root, "src/app/components/cortex-job-console.tsx");
-assert.ok(existsSync(componentPath), "Console interativo de jobs precisa existir em src/app/components/cortex-job-console.tsx");
+// O painel autenticado vive em /painel (dashboard com sidebar); a landing só faz o acesso.
+const dashboardPath = join(root, "src/app/painel/dashboard.tsx");
+const painelPagePath = join(root, "src/app/painel/page.tsx");
+assert.ok(existsSync(dashboardPath), "Dashboard precisa existir em src/app/painel/dashboard.tsx");
+assert.ok(existsSync(painelPagePath), "Rota /painel precisa existir em src/app/painel/page.tsx");
 
-const source = readFileSync(componentPath, "utf8");
+const source = readFileSync(dashboardPath, "utf8");
 const requiredTexts = [
   "use client",
-  "Entrar no Cortex",
-  "Tema do pacote",
+  "Criar conteúdo",
+  "Publicar",
+  "Voz da marca",
+  "Conta",
+  "Tema",
   "Objetivo",
-  "Plataforma prioritária",
-  "Contexto estratégico",
-  "Jobs recentes",
-  "Artifact gerado",
+  "Contexto",
+  "Gerações recentes",
+  "Pacote gerado",
+  "Publicar no LinkedIn",
   "/api/jobs",
+  "/api/publications",
 ];
 
 for (const text of requiredTexts) {
-  assert.ok(source.includes(text), `Console de jobs sem texto/comportamento obrigatório: ${text}`);
+  assert.ok(source.includes(text), `Dashboard sem texto/comportamento obrigatório: ${text}`);
 }
 
-const page = readFileSync(join(root, "src/app/page.tsx"), "utf8");
-assert.ok(page.includes("CortexJobConsole"), "A home precisa renderizar o console interativo de jobs");
+// O painel protege por sessão (401 volta para a landing) e não usa jargão interno na UI visível.
+assert.ok(source.includes("/api/auth/me"), "Dashboard deve checar a sessão em /api/auth/me");
+assert.ok(source.includes("/#acesso"), "Dashboard deve redirecionar para a landing quando não autenticado");
 
-console.log(`Interactive jobs UI OK: ${requiredTexts.length} contratos encontrados.`);
+const page = readFileSync(join(root, "src/app/page.tsx"), "utf8");
+assert.ok(page.includes("AuthCard"), "A home precisa renderizar o card de acesso (AuthCard)");
+assert.ok(!page.includes("CortexJobConsole"), "A home não deve mais embutir o console gigante");
+
+console.log(`Interactive dashboard UI OK: ${requiredTexts.length} contratos encontrados.`);

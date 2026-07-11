@@ -7,7 +7,7 @@ const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
 const mvpPath = join(root, "src/lib/cortex-mvp.ts");
 const gatewayPath = join(root, "src/lib/llm-gateway.ts");
 const jobsRoutePath = join(root, "src/app/api/jobs/route.ts");
-const uiPath = join(root, "src/app/components/cortex-job-console.tsx");
+const uiPath = join(root, "src/app/painel/dashboard.tsx");
 
 for (const path of [mvpPath, gatewayPath, jobsRoutePath, uiPath]) {
   assert.ok(existsSync(path), `Arquivo esperado ausente: ${path}`);
@@ -35,7 +35,7 @@ assert.match(gateway, /max_tokens/, "Gateway deve enviar max_tokens ao provider 
 
 const ui = readFileSync(uiPath, "utf8");
 assert.match(ui, /quotaStatus/, "UI deve conhecer quotaStatus");
-assert.match(ui, /Quota mensal/, "UI deve exibir quota mensal");
-assert.match(ui, /tokens restantes/, "UI deve exibir tokens restantes");
+assert.match(ui, /usagePercent/, "UI deve exibir o percentual de uso do limite");
+assert.match(ui, /remainingTokens/, "UI deve exibir o limite mensal restante");
 
 console.log("Quota guard contract OK: limite mensal, limite por execução e UI de quota estão conectados.");
