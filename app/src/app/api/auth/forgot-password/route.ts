@@ -47,12 +47,17 @@ export async function POST(request: Request) {
     });
     const baseUrl = process.env.CORTEX_PUBLIC_URL ?? "https://cortex.nutef.com";
     const resetUrl = `${baseUrl}/?resetToken=${encodeURIComponent(token)}#acesso`;
+    // O registro persistido em EmailMessage guarda o link SEM o token: o token cru só
+    // existe no e-mail entregue (persistir o corpo real anularia o hash do PasswordResetToken).
+    const redactedUrl = `${baseUrl}/?resetToken=[redigido]#acesso`;
     await sendTransactionalEmail({
       to: user.email,
       userId: user.id,
       subject: "Redefinição de senha do Cortex",
       text: `Use este link em até 1 hora para redefinir sua senha: ${resetUrl}`,
       html: `<p>Use este link em até 1 hora para redefinir sua senha:</p><p><a href="${resetUrl}">Redefinir senha</a></p>`,
+      storageText: `Use este link em até 1 hora para redefinir sua senha: ${redactedUrl}`,
+      storageHtml: `<p>Use este link em até 1 hora para redefinir sua senha:</p><p><a href="${redactedUrl}">Redefinir senha</a></p>`,
     }).catch(() => null);
   }
 

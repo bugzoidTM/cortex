@@ -47,8 +47,8 @@ export const PRODUCTION_READINESS_ITEMS = [
   },
   {
     status: "done",
-    title: "Trial BYOK 14 dias",
-    detail: "Usuário autenticado pode testar com sua própria chave API OpenAI-compatible; a chave é criptografada, mascarada e expira automaticamente em 14 dias.",
+    title: "Trial self-service BYOK 14 dias",
+    detail: "Registro self-service em /api/auth/register cria conta de teste sem pagamento (plano trial); geração exige a chave própria do cliente (criptografada, mascarada, expira em 14 dias) e o teste expira sozinho com CTA de assinatura.",
   },
   {
     status: "done",
@@ -61,9 +61,9 @@ export const PRODUCTION_READINESS_ITEMS = [
     detail: "Quota mensal por tenant, limite de entrada por execução e max_tokens no provider.",
   },
   {
-    status: "partial",
+    status: "done",
     title: "Jobs assíncronos e worker",
-    detail: "Operacional para beta inicial: POST /api/jobs enfileira PENDING e o serviço Swarm cortex_worker processa PENDING/PROCESSING/COMPLETED/FAILED. Próximo endurecimento: retry com backoff, reprocessamento manual e timeout por provider.",
+    detail: "POST /api/jobs enfileira PENDING e o cortex_worker processa com retry (3 tentativas), timeout por provider, reclaim de jobs órfãos (PROCESSING preso volta à fila) e heartbeat com healthcheck no Swarm. Falha real vira FAILED honesto com alerta; fallback determinístico só sem LLM configurado, com alerta e sem consumo de quota.",
   },
   {
     status: "partial",
@@ -71,14 +71,14 @@ export const PRODUCTION_READINESS_ITEMS = [
     detail: "Rate limit persistente já protege POST /api/jobs por tenant/usuário/IP via RateLimitEvent, além de login, checkout, recuperação de senha e gestão de chave BYOK por IP. Próximo endurecimento: auditoria admin e políticas por plano.",
   },
   {
-    status: "partial",
+    status: "done",
     title: "Backup e restore PostgreSQL",
-    detail: "Backup diário local ativo no serviço Swarm cortex_backup, com pg_dump -Fc, retenção e smoke de restore via pg_restore -l. Próximo endurecimento: cópia offsite e alerta obrigatório de falha.",
+    detail: "Backup diário no serviço Swarm cortex_backup (pg_dump -Fc, retenção 7d), cópia offsite via rclone para o MinIO e alerta de falha por webhook/e-mail.",
   },
   {
     status: "done",
     title: "Checkout e billing",
-    detail: "Checkout self-service Woovi (Pix), liberação automática por webhook OPENPIX:CHARGE_COMPLETED, bloqueio de inadimplência por assinatura e renovação mensal com nova cobrança e aviso de vencimento.",
+    detail: "Checkout self-service Woovi (Pix) com retomada de checkout abandonado e upgrade de trial; webhook idempotente; carência real de 5 dias; invoice Pix vencida vira EXPIRED com re-cobrança automática (inclusive para inadimplente); cancelamento self-service no fim do período; limpeza de checkouts nunca pagos.",
   },
   {
     status: "done",
@@ -88,7 +88,7 @@ export const PRODUCTION_READINESS_ITEMS = [
   {
     status: "partial",
     title: "Observabilidade operacional",
-    detail: "Cobertura inicial disponível: logs estruturados JSON no worker/backup, jobs recentes, custos por tenant e alertas via CORTEX_ALERT_WEBHOOK_URL. Próximo endurecimento: dashboard de latência, métricas históricas e monitor externo obrigatório.",
+    detail: "Logs estruturados JSON, alertas por e-mail (CORTEX_ALERT_EMAIL) e webhook opcional em job falho/fallback/worker/backup, healthcheck de db/web/worker e /api/health com estado da fila. Próximo endurecimento: monitor de uptime externo apontado para /api/health e error tracking (Sentry).",
   },
   {
     status: "needed",

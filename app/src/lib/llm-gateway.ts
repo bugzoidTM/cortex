@@ -8,7 +8,17 @@ type BrandContext = {
   audience?: string | null;
   promise?: string | null;
   restrictions?: string[] | null;
+  sampleContent?: string | null;
 };
+
+// Falha transitória do provider (HTTP, timeout, resposta vazia): o job volta para a fila
+// e tenta de novo em vez de entregar template enlatado como se fosse sucesso.
+export class LlmGenerationError extends Error {
+  constructor(public readonly reason: string) {
+    super(reason);
+    this.name = "LlmGenerationError";
+  }
+}
 
 type GatewayResult = {
   content: string;
@@ -97,14 +107,14 @@ export async function generateContentPackageArtifact(
     });
 
     if (!response.ok) {
-      return deterministicFallback(input, brand, Date.now() - startedAt, `openai_compatible_http_${response.status}`);
+      throw new LlmGenerationError(`openai_compatible_http_${response.status}`);
     }
 
     const payload = (await response.json()) as OpenAICompatibleResponse;
     const content = payload.choices?.[0]?.message?.content?.trim();
 
     if (!content) {
-      return deterministicFallback(input, brand, Date.now() - startedAt, "empty_openai_compatible_content");
+      throw new LlmGenerationError("empty_openai_compatible_content");
     }
 
     const promptTokens = payload.usage?.prompt_tokens ?? estimateTokens(JSON.stringify(messages));
@@ -124,9 +134,12 @@ export async function generateContentPackageArtifact(
       latencyMs: Date.now() - startedAt,
       status: "completed",
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof LlmGenerationError) {
+      throw error;
+    }
     const reason = controller.signal.aborted ? "openai_compatible_timeout" : "openai_compatible_exception";
-    return deterministicFallback(input, brand, Date.now() - startedAt, reason);
+    throw new LlmGenerationError(reason);
   } finally {
     clearTimeout(timeout);
   }
@@ -151,6 +164,9 @@ function buildMessages(input: CreateJobInput, brand?: BrandContext | null) {
         brand?.audience ? `Público: ${brand.audience}` : null,
         brand?.promise ? `Promessa central: ${brand.promise}` : null,
         brand?.restrictions?.length ? `Restrições: ${brand.restrictions.join("; ")}` : null,
+        brand?.sampleContent
+          ? `Exemplo de conteúdo aprovado pela marca (use como referência de estilo, não copie):\n${brand.sampleContent.slice(0, 1500)}`
+          : null,
       ]
         .filter(Boolean)
         .join("\n"),
@@ -163,13 +179,15 @@ function buildMessages(input: CreateJobInput, brand?: BrandContext | null) {
         `Plataforma prioritária: ${input.primaryPlatform}`,
         `Contexto estratégico: ${input.context}`,
         "",
-        "Gere:",
+        "Gere, nesta ordem e com um título de seção Markdown para cada item:",
         "1. Um post LinkedIn completo.",
         "2. Um roteiro curto para Reels/TikTok.",
         "3. Um outline de carrossel.",
         "4. Três legendas curtas.",
-        "5. Um e-mail/newsletter curto.",
-        "6. Observações de revisão humana.",
+        "5. Cinco ganchos alternativos de abertura.",
+        "6. Um e-mail/newsletter curto.",
+        "7. Checklist de publicação.",
+        "8. Observações de revisão humana.",
       ].join("\n"),
     },
   ];
@@ -220,8 +238,9 @@ function deterministicFallback(input: CreateJobInput, brand: BrandContext | null
     provider: "internal-mvp",
     model: DEFAULT_MODEL,
     llmProviderConfigId: null,
-    inputTokens: estimateTokens(JSON.stringify(input)),
-    outputTokens: estimateTokens(content),
+    // Conteúdo enlatado não consome a quota do cliente: os tokens só contam em geração real.
+    inputTokens: 0,
+    outputTokens: 0,
     inputCostPer1M: "0",
     outputCostPer1M: "0",
     costUsd: "0",

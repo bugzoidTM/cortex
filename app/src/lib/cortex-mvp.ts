@@ -15,6 +15,8 @@ export type CreateJobInput = z.infer<typeof createJobInputSchema>;
 
 const DEFAULT_MAX_JOB_INPUT_TOKENS = 2_500;
 const MAX_WORKER_ATTEMPTS = 3;
+// Job PROCESSING sem progresso além disso é órfão de um worker que morreu no meio (timeout do LLM é 300s).
+const STALE_JOB_MINUTES = 15;
 
 export class QuotaExceededError extends Error {
   constructor(
@@ -79,7 +81,7 @@ export async function getTenantQuotaStatus(tenantId: string, estimatedJobTokens 
     usagePercent: tenant.monthlyQuota > 0 ? Math.min(100, Math.round((usedTokens / tenant.monthlyQuota) * 100)) : 100,
     estimatedJobTokens,
     maxJobInputTokens,
-    canCreateJob: remainingTokens > 0 && estimatedJobTokens <= maxJobInputTokens,
+    canCreateJob: remainingTokens >= estimatedJobTokens && remainingTokens > 0 && estimatedJobTokens <= maxJobInputTokens,
     resetPeriod: start.toISOString().slice(0, 7),
   };
 }
@@ -92,7 +94,7 @@ export async function assertTenantCanCreateJob(tenantId: string, input: CreateJo
     throw new QuotaExceededError("job_input_token_limit_exceeded", quotaStatus);
   }
 
-  if (quotaStatus.remainingTokens <= 0) {
+  if (quotaStatus.remainingTokens < estimatedJobTokens) {
     throw new QuotaExceededError("monthly_quota_exceeded", quotaStatus);
   }
 
@@ -126,13 +128,14 @@ export async function getMvpSnapshot(tenantId?: string) {
   const tenant = tenantId
     ? await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { brandProfile: true } })
     : await ensureDemoTenant();
-  const [jobs, artifacts, usage, quotaStatus] = await Promise.all([
+  const [jobs, jobCount, artifacts, usage, quotaStatus] = await Promise.all([
     prisma.skillJob.findMany({
       where: { tenantId: tenant.id },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: { briefing: true, artifacts: true, usageLedger: true },
     }),
+    prisma.skillJob.count({ where: { tenantId: tenant.id } }),
     prisma.artifact.count({ where: { tenantId: tenant.id } }),
     prisma.lLMUsageLedger.aggregate({
       where: { tenantId: tenant.id },
@@ -145,7 +148,7 @@ export async function getMvpSnapshot(tenantId?: string) {
     tenant,
     jobs,
     metrics: {
-      jobs: jobs.length,
+      jobs: jobCount,
       artifacts,
       inputTokens: usage._sum.inputTokens ?? 0,
       outputTokens: usage._sum.outputTokens ?? 0,
@@ -189,6 +192,36 @@ export async function enqueueContentPackageJob(input: CreateJobInput, tenantId?:
   return { tenant, briefing: result.briefing, job: result.job, quotaStatus };
 }
 
+// Devolve à fila jobs PROCESSING órfãos (worker morreu/reiniciou no meio). Quem já esgotou
+// as tentativas vira FAILED de vez, com alerta — nunca fica preso invisível para sempre.
+export async function reclaimStaleJobs(now = new Date()) {
+  const staleBefore = new Date(now.getTime() - STALE_JOB_MINUTES * 60 * 1000);
+
+  const requeued = await prisma.skillJob.updateMany({
+    where: { status: "PROCESSING", lockedAt: { lt: staleBefore }, attempts: { lt: MAX_WORKER_ATTEMPTS } },
+    data: { status: "PENDING", lockedAt: null, error: "worker_interrompido_reprocessando" },
+  });
+
+  const exhausted = await prisma.skillJob.findMany({
+    where: { status: "PROCESSING", lockedAt: { lt: staleBefore }, attempts: { gte: MAX_WORKER_ATTEMPTS } },
+    select: { id: true, tenantId: true, skill: true },
+  });
+  if (exhausted.length > 0) {
+    await prisma.skillJob.updateMany({
+      where: { id: { in: exhausted.map((job) => job.id) } },
+      data: { status: "FAILED", error: "worker_interrompido_sem_tentativas", completedAt: now, lockedAt: null },
+    });
+    for (const job of exhausted) {
+      await notifyAlert(`Job ${job.id} falhou: worker interrompido sem tentativas restantes`, {
+        tenantId: job.tenantId,
+        skill: job.skill,
+      });
+    }
+  }
+
+  return { requeued: requeued.count, failed: exhausted.length };
+}
+
 export async function processNextContentPackageJob() {
   const job = await prisma.skillJob.findFirst({
     where: { status: "PENDING", attempts: { lt: MAX_WORKER_ATTEMPTS } },
@@ -221,6 +254,15 @@ export async function processContentPackageJob(jobId: string) {
 
   try {
     const generation = await generateContentPackageArtifact(parsed, job.tenant.brandProfile, job.tenantId);
+
+    // Fallback determinístico só acontece com LLM não configurado — o operador precisa saber na hora.
+    if (generation.status === "fallback") {
+      await notifyAlert(`Job ${job.id} entregue por fallback determinístico (LLM não configurado)`, {
+        tenantId: job.tenantId,
+        skill: job.skill,
+        summary: generation.summary,
+      });
+    }
 
     return prisma.$transaction(async (tx) => {
       const updatedJob = await tx.skillJob.update({

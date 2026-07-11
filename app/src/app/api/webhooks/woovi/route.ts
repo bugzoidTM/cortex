@@ -1,4 +1,5 @@
 import { handleWooviChargeCompleted } from "@/lib/billing";
+import { notifyAlert } from "@/lib/alerts";
 import { getWooviWebhookSecret } from "@/lib/woovi";
 
 export const dynamic = "force-dynamic";
@@ -59,8 +60,10 @@ export async function POST(request: Request) {
     const result = await handleWooviChargeCompleted(payload);
     return Response.json({ ok: true, event: "OPENPIX:CHARGE_COMPLETED", correlationID: result.invoice.wooviCorrelationID });
   } catch (error) {
-    // Cobrança desconhecida (ex.: cobrança de teste enviada pela Woovi) — reconhece e ignora.
+    // Cobrança desconhecida (ex.: cobrança de teste enviada pela Woovi) — reconhece e ignora,
+    // mas avisa o operador: pode ser pagamento real sem conta provisionada (checkout que falhou no meio).
     if (isRecordNotFound(error)) {
+      await notifyAlert("Webhook Woovi: CHARGE_COMPLETED sem invoice correspondente", { correlationID });
       return Response.json({ ok: true, ignored: true, reason: "charge_not_found" });
     }
     throw error;

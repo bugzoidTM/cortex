@@ -1,4 +1,4 @@
-import { createSelfServiceCheckout } from "@/lib/billing";
+import { CheckoutConflictError, createSelfServiceCheckout } from "@/lib/billing";
 import { checkRateLimit, getClientIp, ipRateLimitKey, RateLimitExceededError } from "@/lib/rate-limit";
 import { ZodError } from "zod";
 
@@ -32,6 +32,10 @@ export async function POST(request: Request) {
     }
     if (error instanceof ZodError) {
       return Response.json({ ok: false, error: "invalid_input", issues: error.flatten() }, { status: 400 });
+    }
+    if (error instanceof CheckoutConflictError) {
+      const errorCode = error.reason === "already_subscribed" ? "tenant_already_subscribed" : "email_or_company_already_exists";
+      return Response.json({ ok: false, error: errorCode }, { status: 409 });
     }
     if (error instanceof Error && error.message === "woovi_app_id_missing") {
       return Response.json({ ok: false, error: "woovi_not_configured" }, { status: 503 });

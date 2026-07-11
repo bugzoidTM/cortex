@@ -10,6 +10,10 @@ export type TransactionalEmailInput = {
   text: string;
   html?: string;
   userId?: string | null;
+  // Versões redigidas para persistência: o corpo real vai só ao destinatário.
+  // Usado quando o e-mail carrega segredo de uso único (ex.: token de reset de senha).
+  storageText?: string;
+  storageHtml?: string;
 };
 
 export function getEmailRuntimeStatus() {
@@ -32,8 +36,8 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput) {
       userId: input.userId ?? null,
       to: input.to.toLowerCase(),
       subject: input.subject,
-      text: input.text,
-      html: input.html,
+      text: input.storageText ?? input.text,
+      html: input.storageHtml ?? input.html,
       status: "PENDING",
       provider: "smtp",
     },
