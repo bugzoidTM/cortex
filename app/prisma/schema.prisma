@@ -26,6 +26,8 @@ model Tenant {
   llmCredential      TenantLlmCredential?
   subscriptions      Subscription[]
   paymentInvoices    PaymentInvoice[]
+  socialConnections  SocialConnection[]
+  publications       Publication[]
 }
 
 model TenantLlmCredential {
@@ -127,17 +129,17 @@ model PasswordResetToken {
 }
 
 model EmailMessage {
-  id          String    @id @default(cuid())
-  userId      String?
-  to          String
-  subject     String
-  text        String
-  html        String?
-  status      String    @default("PENDING")
-  provider    String    @default("smtp")
-  error       String?
-  sentAt      DateTime?
-  createdAt   DateTime  @default(now())
+  id        String    @id @default(cuid())
+  userId    String?
+  to        String
+  subject   String
+  text      String
+  html      String?
+  status    String    @default("PENDING")
+  provider  String    @default("smtp")
+  error     String?
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -146,19 +148,19 @@ model EmailMessage {
 }
 
 model Subscription {
-  id                  String             @id @default(cuid())
-  tenantId            String
-  plan                String
-  status              SubscriptionStatus @default(PENDING)
-  amountCents         Int
-  currency            String             @default("BRL")
-  monthlyQuota        Int
-  currentPeriodStart  DateTime?
-  currentPeriodEnd    DateTime?
-  pastDueSince        DateTime?
-  cancelAtPeriodEnd   Boolean            @default(false)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  tenantId           String
+  plan               String
+  status             SubscriptionStatus @default(PENDING)
+  amountCents        Int
+  currency           String             @default("BRL")
+  monthlyQuota       Int
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  pastDueSince       DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoices PaymentInvoice[]
@@ -168,21 +170,21 @@ model Subscription {
 }
 
 model PaymentInvoice {
-  id                String        @id @default(cuid())
-  tenantId          String
-  subscriptionId    String?
-  wooviCorrelationID String       @unique
-  wooviChargeId     String?
-  status            InvoiceStatus @default(PENDING)
-  amountCents       Int
-  paymentLinkUrl    String?
-  brCode            String?
-  qrCodeImage       String?
-  paidAt            DateTime?
-  expiresAt         DateTime?
-  rawPayload        Json?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  tenantId           String
+  subscriptionId     String?
+  wooviCorrelationID String        @unique
+  wooviChargeId      String?
+  status             InvoiceStatus @default(PENDING)
+  amountCents        Int
+  paymentLinkUrl     String?
+  brCode             String?
+  qrCodeImage        String?
+  paidAt             DateTime?
+  expiresAt          DateTime?
+  rawPayload         Json?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
@@ -254,9 +256,61 @@ model Artifact {
   format    String   @default("markdown")
   createdAt DateTime @default(now())
 
-  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  job    SkillJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job          SkillJob?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  publications Publication[]
 
+  @@index([tenantId, createdAt])
+}
+
+model SocialConnection {
+  id                 String                 @id @default(cuid())
+  tenantId           String
+  platform           String // "linkedin"
+  externalId         String // sub do OIDC (person id)
+  externalUrn        String // urn:li:person:{id}
+  displayName        String?
+  scopes             String[]               @default([])
+  encryptedToken     String // access token cifrado (AES-256-GCM)
+  tokenExpiresAt     DateTime // agora + 60 dias (LinkedIn não dá refresh no self-serve)
+  status             SocialConnectionStatus @default(ACTIVE)
+  expiryNoticeSentAt DateTime? // idempotência do aviso de reconexão
+  connectedByUserId  String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  publications Publication[]
+
+  @@unique([tenantId, platform])
+  @@index([status, tokenExpiresAt])
+}
+
+model Publication {
+  id              String            @id @default(cuid())
+  tenantId        String
+  connectionId    String
+  artifactId      String?
+  platform        String // "linkedin"
+  authorUrn       String
+  commentary      String // texto final aprovado pelo usuário (ação explícita)
+  mediaImageUrns  String[]          @default([])
+  status          PublicationStatus @default(PENDING)
+  externalPostUrn String?
+  externalUrl     String?
+  scheduledFor    DateTime?
+  attempts        Int               @default(0)
+  lockedAt        DateTime?
+  publishedAt     DateTime?
+  error           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connection SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  artifact   Artifact?        @relation(fields: [artifactId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledFor])
   @@index([tenantId, createdAt])
 }
 
@@ -314,4 +368,18 @@ enum InvoiceStatus {
   PAID
   EXPIRED
   CANCELED
+}
+
+enum SocialConnectionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum PublicationStatus {
+  PENDING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
 }

@@ -38,6 +38,9 @@ services:
       - cortex_woovi_app_id
       - cortex_woovi_webhook_secret
       - cortex_smtp_password_v2
+      - cortex_social_token_secret
+      - cortex_linkedin_client_id
+      - cortex_linkedin_client_secret
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
@@ -58,6 +61,10 @@ services:
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_SUPERUSER_EMAILS: "admin@nutef.com"
       CORTEX_ALERT_EMAIL: "elenilton_freitas@yahoo.com.br"
+      CORTEX_SOCIAL_TOKEN_SECRET_FILE: "/run/secrets/cortex_social_token_secret"
+      LINKEDIN_CLIENT_ID_FILE: "/run/secrets/cortex_linkedin_client_id"
+      LINKEDIN_CLIENT_SECRET_FILE: "/run/secrets/cortex_linkedin_client_secret"
+      LINKEDIN_REDIRECT_URI: "https://cortex.nutef.com/api/social/linkedin/callback"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -92,6 +99,9 @@ services:
       - cortex_woovi_app_id
       - cortex_woovi_webhook_secret
       - cortex_smtp_password_v2
+      - cortex_social_token_secret
+      - cortex_linkedin_client_id
+      - cortex_linkedin_client_secret
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
@@ -110,6 +120,10 @@ services:
       CORTEX_MAX_JOB_INPUT_TOKENS: "2500"
       CORTEX_WORKER_POLL_INTERVAL_MS: "5000"
       CORTEX_ALERT_EMAIL: "elenilton_freitas@yahoo.com.br"
+      CORTEX_SOCIAL_TOKEN_SECRET_FILE: "/run/secrets/cortex_social_token_secret"
+      LINKEDIN_CLIENT_ID_FILE: "/run/secrets/cortex_linkedin_client_id"
+      LINKEDIN_CLIENT_SECRET_FILE: "/run/secrets/cortex_linkedin_client_secret"
+      LINKEDIN_REDIRECT_URI: "https://cortex.nutef.com/api/social/linkedin/callback"
       # Opcional: webhook (Slack/Discord/etc.) para alerta de job falho e erro do worker.
       # CORTEX_ALERT_WEBHOOK_URL: "https://hooks.slack.com/services/XXX"
     command: >
@@ -177,6 +191,12 @@ secrets:
   cortex_smtp_password_v2:
     external: true
   cortex_rclone_conf:
+    external: true
+  cortex_social_token_secret:
+    external: true
+  cortex_linkedin_client_id:
+    external: true
+  cortex_linkedin_client_secret:
     external: true
 
 volumes:

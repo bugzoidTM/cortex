@@ -3,12 +3,14 @@ import { notifyAlert } from "./alerts";
 import { prisma } from "./prisma";
 import { processNextContentPackageJob, reclaimStaleJobs } from "./cortex-mvp";
 import { runBillingRenewalCycle } from "./billing";
+import { processNextPublication, reclaimStalePublications, runSocialExpiryNoticeCycle } from "./social";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const ALERT_THROTTLE_MS = 5 * 60 * 1000;
 const DEFAULT_BILLING_CYCLE_INTERVAL_MS = 60 * 60 * 1000;
 const RECLAIM_INTERVAL_MS = 60 * 1000;
 const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const SOCIAL_EXPIRY_INTERVAL_MS = 60 * 60 * 1000;
 // Retenção LGPD: e-mails transacionais e sessões/eventos expirados não ficam para sempre.
 const EMAIL_RETENTION_DAYS = 90;
 // O healthcheck do container lê este arquivo: heartbeat parado = worker morto/travado.
@@ -17,6 +19,7 @@ let lastWorkerErrorAlertAt = 0;
 let lastBillingCycleAt = 0;
 let lastReclaimAt = 0;
 let lastRetentionAt = 0;
+let lastSocialExpiryAt = 0;
 
 // Recorrência mensal: gera cobranças de renovação e marca inadimplência, gated por intervalo.
 async function maybeRunBillingCycle() {
@@ -44,13 +47,33 @@ async function maybeReclaimStaleJobs() {
   }
   lastReclaimAt = now;
   try {
-    const result = await reclaimStaleJobs();
-    if (result.requeued || result.failed) {
-      console.log(JSON.stringify({ event: "stale_jobs_reclaimed", ...result }));
+    const [jobs, pubs] = await Promise.all([reclaimStaleJobs(), reclaimStalePublications()]);
+    if (jobs.requeued || jobs.failed) {
+      console.log(JSON.stringify({ event: "stale_jobs_reclaimed", ...jobs }));
+    }
+    if (pubs.requeued || pubs.failed) {
+      console.log(JSON.stringify({ event: "stale_publications_reclaimed", ...pubs }));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
     console.error(JSON.stringify({ event: "stale_jobs_reclaim_error", error: message }));
+  }
+}
+
+async function maybeRunSocialExpiryCycle() {
+  const now = Date.now();
+  if (now - lastSocialExpiryAt < SOCIAL_EXPIRY_INTERVAL_MS) {
+    return;
+  }
+  lastSocialExpiryAt = now;
+  try {
+    const result = await runSocialExpiryNoticeCycle();
+    if (result.notified || result.markedExpired) {
+      console.log(JSON.stringify({ event: "social_expiry_cycle", ...result }));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    console.error(JSON.stringify({ event: "social_expiry_cycle_error", error: message }));
   }
 }
 
@@ -100,10 +123,17 @@ export async function runWorkerLoop() {
     await maybeRunBillingCycle();
     await maybeReclaimStaleJobs();
     await maybeRunRetentionCycle();
+    await maybeRunSocialExpiryCycle();
     try {
       const result = await processNextContentPackageJob();
       if (result) {
         console.log(JSON.stringify({ event: "job_processed", jobId: result.job.id, status: result.job.status, latencyMs: Date.now() - startedAt }));
+        continue;
+      }
+      // Sem job de geração pendente: tenta publicar uma peça aprovada da fila.
+      const published = await processNextPublication();
+      if (published) {
+        console.log(JSON.stringify({ event: "publication_processed", publicationId: published.id, status: published.status, latencyMs: Date.now() - startedAt }));
         continue;
       }
     } catch (error) {

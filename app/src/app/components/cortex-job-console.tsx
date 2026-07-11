@@ -100,6 +100,28 @@ type BillingState = {
   } | null;
 };
 
+type SocialState = {
+  configured: boolean;
+  connection: {
+    connected: boolean;
+    displayName: string | null;
+    status: string | null;
+    tokenExpiresAt: string | null;
+    expiringSoon: boolean;
+  };
+};
+
+type PublicationRow = {
+  id: string;
+  platform: string;
+  commentary: string;
+  status: string;
+  externalUrl: string | null;
+  error: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+};
+
 const API_ERROR_MESSAGES: Record<string, string> = {
   invalid_credentials: "E-mail ou senha incorretos.",
   invalid_input: "Dados inválidos — confira os campos preenchidos.",
@@ -133,6 +155,37 @@ const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
   CANCELED: "Cancelada",
   INCOMPLETE: "Incompleta",
 };
+
+const PUBLICATION_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Na fila",
+  PUBLISHING: "Publicando",
+  PUBLISHED: "Publicado",
+  FAILED: "Falhou",
+  CANCELLED: "Cancelado",
+};
+
+const SOCIAL_QUERY_MESSAGES: Record<string, string> = {
+  linkedin_conectado: "LinkedIn conectado com sucesso.",
+  linkedin_erro: "Não foi possível conectar o LinkedIn. Tente novamente.",
+  linkedin_negado: "Conexão com o LinkedIn cancelada.",
+};
+
+const PUBLICATION_ERROR_MESSAGES: Record<string, string> = {
+  conexao_expirada_reconecte: "a conexão do LinkedIn expirou — reconecte para publicar",
+  permissao_negada_linkedin: "o LinkedIn recusou a permissão de publicação",
+  worker_interrompido_sem_tentativas: "o processamento foi interrompido",
+};
+
+// Extrai a seção "Post LinkedIn" do artifact em Markdown para pré-preencher o editor.
+function extractLinkedInSection(markdown: string): string {
+  const lines = markdown.split("\n");
+  const start = lines.findIndex((l) => /^#{1,3}\s+.*linkedin/i.test(l));
+  if (start === -1) return markdown.trim();
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^#{1,3}\s+/.test(l));
+  const body = (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
+  return body || markdown.trim();
+}
 
 function friendlyApiError(payload: { error?: string } | null, httpStatus: number, fallback: string) {
   const slug = payload?.error;
@@ -200,6 +253,12 @@ export function CortexJobConsole() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBillingAction, setIsBillingAction] = useState(false);
+  const [social, setSocial] = useState<SocialState | null>(null);
+  const [publications, setPublications] = useState<PublicationRow[]>([]);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishText, setPublishText] = useState("");
+  const [publishArtifactId, setPublishArtifactId] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Detecta a transição "gerando → terminou" entre atualizações do polling para
   // anunciar o desfecho (sucesso, contingência ou falha) sem o cliente recarregar nada.
@@ -240,6 +299,20 @@ export function CortexJobConsole() {
     }
     const data = await response.json();
     setBilling({ plan: data.plan, trial: data.trial, subscription: data.subscription });
+  }, []);
+
+  const loadSocial = useCallback(async () => {
+    const response = await fetch("/api/social", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    setSocial({ configured: data.configured, connection: data.connection });
+  }, []);
+
+  const loadPublications = useCallback(async () => {
+    const response = await fetch("/api/publications", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    setPublications(data.publications ?? []);
   }, []);
 
   const loadBrandProfile = useCallback(async () => {
@@ -296,8 +369,8 @@ export function CortexJobConsole() {
 
     const session = await me.json();
     setAuth({ authenticated: true, email: session.user.email, tenantId: session.tenantId });
-    await Promise.all([loadBrandProfile(), loadLlmCredential(), loadJobs(), loadBilling()]);
-  }, [loadBrandProfile, loadLlmCredential, loadJobs, loadBilling]);
+    await Promise.all([loadBrandProfile(), loadLlmCredential(), loadJobs(), loadBilling(), loadSocial(), loadPublications()]);
+  }, [loadBrandProfile, loadLlmCredential, loadJobs, loadBilling, loadSocial, loadPublications]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -308,6 +381,18 @@ export function CortexJobConsole() {
 
     return () => window.clearTimeout(timeout);
   }, [loadSessionAndJobs]);
+
+  // Mensagem de retorno do OAuth do LinkedIn (?social=…), lida uma vez e limpa da URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const param = new URLSearchParams(window.location.search).get("social");
+    if (!param || !SOCIAL_QUERY_MESSAGES[param]) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("social");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    const timeout = window.setTimeout(() => setStatus(SOCIAL_QUERY_MESSAGES[param]), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   const hasActiveJobs = useMemo(
     () => (payload?.jobs ?? []).some((job) => job.status === "PENDING" || job.status === "PROCESSING"),
@@ -324,6 +409,16 @@ export function CortexJobConsole() {
     }, 5000);
     return () => window.clearTimeout(timeout);
   }, [auth.authenticated, hasActiveJobs, payload, loadJobs]);
+
+  // Publicações na fila (PENDING/PUBLISHING) são acompanhadas até concluir.
+  const hasPendingPub = useMemo(() => publications.some((p) => p.status === "PENDING" || p.status === "PUBLISHING"), [publications]);
+  useEffect(() => {
+    if (!auth.authenticated || !hasPendingPub) return;
+    const timeout = window.setTimeout(() => {
+      loadPublications().catch(() => null);
+    }, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [auth.authenticated, hasPendingPub, publications, loadPublications]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -384,6 +479,9 @@ export function CortexJobConsole() {
     setAuth({ authenticated: false });
     setPayload(null);
     setBilling(null);
+    setSocial(null);
+    setPublications([]);
+    setPublishOpen(false);
     setActionLink(null);
     setStatus("Sessão encerrada.");
   }
@@ -550,11 +648,64 @@ export function CortexJobConsole() {
     }
   }
 
+  function handleConnectLinkedIn() {
+    // Redireciona para o início do OAuth (o endpoint responde 302 para o LinkedIn).
+    window.location.href = "/api/social/linkedin/connect";
+  }
+
+  async function handleDisconnectLinkedIn() {
+    setStatus("Desconectando LinkedIn...");
+    try {
+      const response = await fetch("/api/social", { method: "DELETE" });
+      if (!response.ok) throw new Error("falha");
+      await loadSocial();
+      setStatus("LinkedIn desconectado.");
+    } catch {
+      setStatus("Não foi possível desconectar. Tente novamente.");
+    }
+  }
+
+  function openPublishEditor() {
+    const content = latestArtifact?.content ?? "";
+    setPublishText(extractLinkedInSection(content));
+    setPublishArtifactId(latestArtifact?.id ?? null);
+    setPublishOpen(true);
+  }
+
+  async function handlePublish(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsPublishing(true);
+    setStatus("Enviando para publicação no LinkedIn...");
+    try {
+      const response = await fetch("/api/publications", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commentary: publishText, artifactId: publishArtifactId ?? undefined }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const messages: Record<string, string> = {
+          not_connected: "Conecte seu LinkedIn antes de publicar.",
+          connection_expired: "Sua conexão do LinkedIn expirou — reconecte para publicar.",
+        };
+        throw new Error(messages[data?.error as string] ?? friendlyApiError(data, response.status, "Não foi possível publicar"));
+      }
+      setPublishOpen(false);
+      await loadPublications();
+      setStatus("Post enviado para a fila do LinkedIn — publica em instantes.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao publicar.");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
   const latestJob = payload?.jobs[0];
-  const latestArtifact = useMemo(() => latestJob?.artifacts?.[0], [latestJob]);
+  const latestArtifact = latestJob?.artifacts?.[0];
   const quotaStatus = payload?.quotaStatus;
   const subscription = billing?.subscription;
   const subscriptionBlocked = subscription && ["PENDING", "PAST_DUE", "INCOMPLETE"].includes(subscription.status);
+  const linkedinConnected = social?.connection.connected ?? false;
 
   return (
     <div className="rounded-[2rem] border border-[#2487D8]/20 bg-[#071120] p-5 shadow-2xl shadow-black/30 lg:p-6">
@@ -948,7 +1099,18 @@ export function CortexJobConsole() {
             </div>
 
             <div className="rounded-2xl border border-[#F5A623]/20 bg-[#F5A623]/10 p-4">
-              <h4 className="text-lg font-bold text-[#F5A623]">Artifact gerado</h4>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h4 className="text-lg font-bold text-[#F5A623]">Artifact gerado</h4>
+                {latestArtifact && (
+                  <button
+                    className="rounded-full bg-[#0A66C2] px-4 py-2 text-sm font-black text-white disabled:opacity-60"
+                    type="button"
+                    onClick={openPublishEditor}
+                  >
+                    Publicar no LinkedIn
+                  </button>
+                )}
+              </div>
               <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-[#071120]/80 p-4 text-sm leading-6 text-[#F9E6BC]">
                 {latestArtifact?.content ??
                   (hasActiveJobs
@@ -957,6 +1119,99 @@ export function CortexJobConsole() {
                       ? `A última geração falhou: ${friendlyJobError(latestJob.error)}.`
                       : "Crie um pacote para visualizar o markdown persistido.")}
               </pre>
+
+              {publishOpen && (
+                <form className="mt-4 rounded-xl border border-[#0A66C2]/40 bg-[#071120] p-4" onSubmit={handlePublish}>
+                  <p className="text-sm font-bold text-[#7DC8F5]">Revisar e publicar no LinkedIn</p>
+                  {!linkedinConnected ? (
+                    <div className="mt-3 space-y-3">
+                      <p className="text-sm text-[#D6D3C4]">Conecte seu LinkedIn para publicar. Você revisa e aprova cada post — nada é publicado sozinho.</p>
+                      <button className="rounded-full bg-[#0A66C2] px-5 py-2 text-sm font-black text-white" type="button" onClick={handleConnectLinkedIn}>
+                        Conectar LinkedIn
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <textarea
+                        className="mt-3 min-h-40 w-full rounded-xl border border-white/10 bg-[#0C1A2E] px-4 py-3 text-sm leading-6 text-[#ECEFF4] outline-none focus:border-[#0A66C2]"
+                        value={publishText}
+                        onChange={(event) => setPublishText(event.target.value)}
+                        maxLength={3000}
+                        required
+                      />
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-xs text-[#8FA3B8]">{publishText.length}/3000 · publica no perfil de {social?.connection.displayName ?? "você"}</span>
+                        <div className="flex gap-2">
+                          <button className="rounded-full border border-white/20 px-4 py-2 text-sm font-bold text-[#D6D3C4]" type="button" onClick={() => setPublishOpen(false)}>
+                            Cancelar
+                          </button>
+                          <button className="rounded-full bg-[#0A66C2] px-5 py-2 text-sm font-black text-white disabled:opacity-60" type="submit" disabled={isPublishing || !publishText.trim()}>
+                            {isPublishing ? "Publicando..." : "Publicar agora"}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </form>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-[#0A66C2]/30 bg-[#0C1A2E] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h4 className="text-lg font-bold text-[#7DC8F5]">Redes sociais</h4>
+                {social && social.configured && (
+                  linkedinConnected ? (
+                    <button className="rounded-full border border-white/20 px-4 py-2 text-sm font-bold text-[#D6D3C4]" type="button" onClick={handleDisconnectLinkedIn}>
+                      Desconectar
+                    </button>
+                  ) : (
+                    <button className="rounded-full bg-[#0A66C2] px-4 py-2 text-sm font-black text-white" type="button" onClick={handleConnectLinkedIn}>
+                      Conectar LinkedIn
+                    </button>
+                  )
+                )}
+              </div>
+              {social && !social.configured && (
+                <p className="mt-2 text-sm text-[#D6D3C4]">Publicação no LinkedIn ainda não habilitada nesta instância.</p>
+              )}
+              {social?.configured && (
+                <p className="mt-2 text-sm text-[#D6D3C4]">
+                  {linkedinConnected ? (
+                    <>
+                      Conectado como <b className="text-[#ECEFF4]">{social.connection.displayName ?? "membro"}</b>
+                      {social.connection.tokenExpiresAt && (
+                        <> · válido até {new Date(social.connection.tokenExpiresAt).toLocaleDateString("pt-BR")}</>
+                      )}
+                      {social.connection.expiringSoon && <span className="text-[#F5A623]"> · expira em breve, reconecte</span>}
+                    </>
+                  ) : social.connection.status === "EXPIRED" ? (
+                    "Sua conexão expirou. Reconecte para voltar a publicar."
+                  ) : (
+                    "Conecte seu LinkedIn para publicar os posts gerados. Cada publicação passa pela sua aprovação."
+                  )}
+                </p>
+              )}
+              {publications.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {publications.slice(0, 4).map((pub) => (
+                    <div key={pub.id} className="rounded-xl border border-white/10 bg-[#142A42] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${pub.status === "FAILED" ? "bg-red-500/15 text-red-300" : pub.status === "PUBLISHED" ? "bg-emerald-500/15 text-emerald-300" : "bg-[#2487D8]/15 text-[#7DC8F5]"}`}>
+                          {PUBLICATION_STATUS_LABELS[pub.status] ?? pub.status}
+                        </span>
+                        {pub.externalUrl && pub.status === "PUBLISHED" && (
+                          <a className="text-xs font-bold text-[#7DC8F5] underline" href={pub.externalUrl} target="_blank" rel="noreferrer">ver no LinkedIn</a>
+                        )}
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm text-[#D6D3C4]">{pub.commentary}</p>
+                      {pub.status === "FAILED" && pub.error && (
+                        <p className="mt-1 text-xs text-red-300">{PUBLICATION_ERROR_MESSAGES[pub.error] ?? pub.error}</p>
+                      )}
+                    </div>
+                  ))}
+                  {hasPendingPub && <p className="text-xs text-[#8FA3B8]">Publicações na fila são processadas pelo worker em instantes.</p>}
+                </div>
+              )}
             </div>
 
             <div className="rounded-2xl border border-red-500/20 bg-[#0C1A2E] p-4">
