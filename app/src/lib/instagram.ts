@@ -155,7 +155,17 @@ export async function createImagePost(accessToken: string, igUserId: string, ima
   }
   const published = (await publishRes.json()) as { id?: string };
   const mediaId = published.id ?? "";
-  return { mediaId, url: `https://www.instagram.com/` };
+
+  // 3) permalink (best-effort) — para o "ver no Instagram" apontar direto ao post.
+  let url = "https://www.instagram.com/";
+  if (mediaId) {
+    const permRes = await fetch(`${GRAPH}/${GRAPH_VERSION}/${mediaId}?fields=permalink&access_token=${encodeURIComponent(accessToken)}`).catch(() => null);
+    if (permRes?.ok) {
+      const perm = (await permRes.json()) as { permalink?: string };
+      if (perm.permalink) url = perm.permalink;
+    }
+  }
+  return { mediaId, url };
 }
 
 function mapError(status: number, text: string) {
