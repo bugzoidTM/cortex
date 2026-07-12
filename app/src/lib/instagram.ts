@@ -115,8 +115,10 @@ export async function refreshInstagramToken(accessToken: string): Promise<{ acce
   return { accessToken: json.access_token, expiresInSeconds: json.expires_in ?? IG_LONG_TOKEN_TTL_SECONDS };
 }
 
-export async function fetchInstagramUsername(accessToken: string, userId: string): Promise<string | null> {
-  const url = `${GRAPH}/${GRAPH_VERSION}/${userId}?fields=username&access_token=${encodeURIComponent(accessToken)}`;
+export async function fetchInstagramUsername(accessToken: string, _userId: string): Promise<string | null> {
+  // A doc do Instagram Login usa /me (o id retornado no token é app-scoped e não
+  // resolve direto como nó). O username vira o displayName da conexão.
+  const url = `${GRAPH}/${GRAPH_VERSION}/me?fields=username&access_token=${encodeURIComponent(accessToken)}`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const json = (await res.json()) as { username?: string };
