@@ -13,7 +13,7 @@ import {
 } from "./linkedin";
 import {
   createImagePost,
-  fetchInstagramUsername,
+  fetchInstagramProfile,
   IG_LONG_TOKEN_TTL_SECONDS,
   InstagramApiError,
   InstagramToken,
@@ -127,18 +127,21 @@ export async function saveLinkedInConnection(tenantId: string, userId: string, t
 }
 
 export async function saveInstagramConnection(tenantId: string, userId: string, token: InstagramToken) {
-  const username = await fetchInstagramUsername(token.accessToken, token.userId).catch(() => null);
+  // O id do token é app-scoped; o /me traz o id REAL da conta profissional (o que
+  // a API de publicação aceita) e o username.
+  const profile = await fetchInstagramProfile(token.accessToken).catch(() => ({ userId: null, username: null }));
+  const igUserId = profile.userId ?? token.userId;
   const tokenExpiresAt = new Date(Date.now() + (token.expiresInSeconds || IG_LONG_TOKEN_TTL_SECONDS) * 1000);
   await upsertConnection(tenantId, "instagram", {
-    externalId: token.userId,
-    externalUrn: token.userId,
-    displayName: username,
+    externalId: igUserId,
+    externalUrn: igUserId,
+    displayName: profile.username,
     scopes: ["instagram_business_basic", "instagram_business_content_publish"],
     accessToken: token.accessToken,
     tokenExpiresAt,
     userId,
   });
-  return { displayName: username };
+  return { displayName: profile.username };
 }
 
 async function upsertConnection(

@@ -115,14 +115,14 @@ export async function refreshInstagramToken(accessToken: string): Promise<{ acce
   return { accessToken: json.access_token, expiresInSeconds: json.expires_in ?? IG_LONG_TOKEN_TTL_SECONDS };
 }
 
-export async function fetchInstagramUsername(accessToken: string, _userId: string): Promise<string | null> {
-  // A doc do Instagram Login usa /me (o id retornado no token é app-scoped e não
-  // resolve direto como nó). O username vira o displayName da conexão.
-  const url = `${GRAPH}/${GRAPH_VERSION}/me?fields=username&access_token=${encodeURIComponent(accessToken)}`;
+// O user_id do token é APP-SCOPED e não serve para publicar. O /me devolve o
+// user_id REAL da conta profissional (usado em /{ig-id}/media) e o username.
+export async function fetchInstagramProfile(accessToken: string): Promise<{ userId: string | null; username: string | null }> {
+  const url = `${GRAPH}/${GRAPH_VERSION}/me?fields=user_id,username&access_token=${encodeURIComponent(accessToken)}`;
   const res = await fetch(url);
-  if (!res.ok) return null;
-  const json = (await res.json()) as { username?: string };
-  return json.username ?? null;
+  if (!res.ok) return { userId: null, username: null };
+  const json = (await res.json()) as { user_id?: number | string; username?: string };
+  return { userId: json.user_id !== undefined ? String(json.user_id) : null, username: json.username ?? null };
 }
 
 export type InstagramPostResult = { mediaId: string; url: string };
