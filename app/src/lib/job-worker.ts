@@ -5,6 +5,7 @@ import { processNextContentPackageJob, reclaimStaleJobs } from "./cortex-mvp";
 import { runBillingRenewalCycle } from "./billing";
 import { processNextPublication, reclaimStalePublications, runSocialExpiryNoticeCycle } from "./social";
 import { pruneOldMediaAssets } from "./media";
+import { runCeoReportCycle } from "./ceo-report";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const ALERT_THROTTLE_MS = 5 * 60 * 1000;
@@ -21,6 +22,7 @@ let lastBillingCycleAt = 0;
 let lastReclaimAt = 0;
 let lastRetentionAt = 0;
 let lastSocialExpiryAt = 0;
+let lastCeoReportCheckAt = 0;
 
 // Recorrência mensal: gera cobranças de renovação e marca inadimplência, gated por intervalo.
 async function maybeRunBillingCycle() {
@@ -101,6 +103,25 @@ async function maybeRunRetentionCycle() {
   }
 }
 
+// Agente CEO: checa a cada 10 min; o próprio ciclo garante 1 envio/dia (hora-alvo
+// + idempotência via EmailMessage, que sobrevive a restart do worker).
+async function maybeRunCeoReport() {
+  const now = Date.now();
+  if (now - lastCeoReportCheckAt < 10 * 60 * 1000) {
+    return;
+  }
+  lastCeoReportCheckAt = now;
+  try {
+    const result = await runCeoReportCycle();
+    if (result.sent) {
+      console.log(JSON.stringify({ event: "ceo_report_sent" }));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    console.error(JSON.stringify({ event: "ceo_report_error", error: message }));
+  }
+}
+
 async function writeHeartbeat() {
   try {
     await writeFile(HEARTBEAT_FILE, Date.now().toString(), "utf8");
@@ -126,6 +147,7 @@ export async function runWorkerLoop() {
     await maybeReclaimStaleJobs();
     await maybeRunRetentionCycle();
     await maybeRunSocialExpiryCycle();
+    await maybeRunCeoReport();
     try {
       const result = await processNextContentPackageJob();
       if (result) {
