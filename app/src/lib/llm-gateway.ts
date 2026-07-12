@@ -145,6 +145,40 @@ export async function generateContentPackageArtifact(
   }
 }
 
+// Completion curta e utilitária (ex.: transformar texto de post em cena de imagem).
+// Best-effort: qualquer falha devolve null e o chamador usa o fallback dele. O custo
+// é desprezível (dezenas de tokens) e não entra no ledger de jobs.
+export async function generateShortText(tenantId: string, systemPrompt: string, userPrompt: string, maxTokens = 160): Promise<string | null> {
+  try {
+    const credential = await getActiveTenantLlmCredential(tenantId);
+    const config = await getActiveLlmProviderConfig(tenantId);
+    const apiKey = credential?.apiKey ?? readSecretEnv("OPENAI_COMPATIBLE_API_KEY");
+    const baseUrl = credential?.trialActive ? credential.baseUrl : config?.baseUrl;
+    const model = credential?.trialActive ? credential.model : config?.model;
+    if (!apiKey || !baseUrl || !model) return null;
+
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        temperature: 0.7,
+        max_tokens: maxTokens,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as OpenAICompatibleResponse;
+    return payload.choices?.[0]?.message?.content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function getTimeoutMs(configured: number) {
   if (!Number.isFinite(configured) || configured < 1000) {
     return 60000;

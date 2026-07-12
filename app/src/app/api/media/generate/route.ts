@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AuthRequiredError, requireCurrentSession } from "@/lib/auth";
 import { buildImagePrompt, generateImage, ImageGenError, isImageGenConfigured } from "@/lib/image-gen";
 import { IG_MAX_IMAGE_BYTES } from "@/lib/instagram";
+import { generateShortText } from "@/lib/llm-gateway";
 import { storeMediaAsset } from "@/lib/media";
 import { checkRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
 
@@ -25,7 +26,19 @@ export async function POST(request: Request) {
     await checkRateLimit({ key: `image_gen:${session.tenantId}`, action: "image_gen", limit: 30, windowSeconds: 24 * 60 * 60 });
 
     const parsed = bodySchema.parse(await request.json().catch(() => ({})));
-    const base = parsed.prompt || parsed.commentary;
+    let base = parsed.prompt;
+    if (!base && parsed.commentary && parsed.commentary.length >= 3) {
+      // Texto de post costuma ser abstrato ("constância vence talento") e rende foto
+      // genérica. O LLM do tenant converte em UMA cena concreta (padrão provado no
+      // fluxo do Apostileiros); se indisponível, cai no texto cru.
+      const scene = await generateShortText(
+        session.tenantId,
+        "Você transforma o texto de um post de rede social em UMA descrição curta de cena fotográfica concreta que ilustre a ideia. Responda só a descrição da cena, em português, até 50 palavras: objetos, ambiente, luz. Nada abstrato, sem pessoas em close, sem texto/letreiros na cena.",
+        parsed.commentary.slice(0, 1500),
+        120,
+      );
+      base = scene ?? parsed.commentary;
+    }
     if (!base || base.length < 3) {
       return Response.json({ ok: false, error: "image_gen_sem_descricao" }, { status: 400 });
     }
