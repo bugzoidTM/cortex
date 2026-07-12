@@ -303,7 +303,10 @@ export async function processNextPublication() {
     });
     return { id: publication.id, status: "PUBLISHED" as const, url: externalUrl };
   } catch (error) {
-    return handlePublishError(publication.id, publication.attempts, connection.id, error);
+    // publication.attempts é o valor PRÉ-claim (o claim incrementa no banco); soma 1
+    // para o handler decidir retry/FAILED com o contador real — senão a última
+    // tentativa vira um PENDING zumbi que o filtro attempts<MAX nunca mais pega.
+    return handlePublishError(publication.id, publication.attempts + 1, connection.id, error);
   }
 }
 
