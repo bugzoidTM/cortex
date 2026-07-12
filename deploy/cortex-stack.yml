@@ -41,7 +41,7 @@ services:
       - cortex_social_token_secret
       - cortex_linkedin_client_id
       - cortex_linkedin_client_secret
-      - cortex_instagram_client_id_v2
+      - cortex_instagram_client_id_v3
       - cortex_instagram_client_secret_v2
     environment:
       NODE_ENV: production
@@ -67,7 +67,7 @@ services:
       LINKEDIN_CLIENT_ID_FILE: "/run/secrets/cortex_linkedin_client_id"
       LINKEDIN_CLIENT_SECRET_FILE: "/run/secrets/cortex_linkedin_client_secret"
       LINKEDIN_REDIRECT_URI: "https://cortex.nutef.com/api/social/linkedin/callback"
-      INSTAGRAM_CLIENT_ID_FILE: "/run/secrets/cortex_instagram_client_id_v2"
+      INSTAGRAM_CLIENT_ID_FILE: "/run/secrets/cortex_instagram_client_id_v3"
       INSTAGRAM_CLIENT_SECRET_FILE: "/run/secrets/cortex_instagram_client_secret_v2"
       INSTAGRAM_REDIRECT_URI: "https://cortex.nutef.com/api/social/instagram/callback"
     healthcheck:
@@ -107,7 +107,7 @@ services:
       - cortex_social_token_secret
       - cortex_linkedin_client_id
       - cortex_linkedin_client_secret
-      - cortex_instagram_client_id_v2
+      - cortex_instagram_client_id_v3
       - cortex_instagram_client_secret_v2
     environment:
       NODE_ENV: production
@@ -131,7 +131,7 @@ services:
       LINKEDIN_CLIENT_ID_FILE: "/run/secrets/cortex_linkedin_client_id"
       LINKEDIN_CLIENT_SECRET_FILE: "/run/secrets/cortex_linkedin_client_secret"
       LINKEDIN_REDIRECT_URI: "https://cortex.nutef.com/api/social/linkedin/callback"
-      INSTAGRAM_CLIENT_ID_FILE: "/run/secrets/cortex_instagram_client_id_v2"
+      INSTAGRAM_CLIENT_ID_FILE: "/run/secrets/cortex_instagram_client_id_v3"
       INSTAGRAM_CLIENT_SECRET_FILE: "/run/secrets/cortex_instagram_client_secret_v2"
       INSTAGRAM_REDIRECT_URI: "https://cortex.nutef.com/api/social/instagram/callback"
       # Opcional: webhook (Slack/Discord/etc.) para alerta de job falho e erro do worker.
@@ -208,7 +208,7 @@ secrets:
     external: true
   cortex_linkedin_client_secret:
     external: true
-  cortex_instagram_client_id_v2:
+  cortex_instagram_client_id_v3:
     external: true
   cortex_instagram_client_secret_v2:
     external: true
