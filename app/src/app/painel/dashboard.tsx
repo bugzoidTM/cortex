@@ -117,6 +117,10 @@ export function Dashboard() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishImage, setPublishImage] = useState<File | null>(null);
   const [publishImagePreview, setPublishImagePreview] = useState<string | null>(null);
+  // Imagem gerada por IA (Etapa B): guardada como MediaAsset, aprovada na prévia.
+  const [genPrompt, setGenPrompt] = useState("");
+  const [genAssetId, setGenAssetId] = useState<string | null>(null);
+  const [genBusy, setGenBusy] = useState(false);
   const [scheduleOn, setScheduleOn] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
 
@@ -358,6 +362,9 @@ export function Dashboard() {
   function resetPublishExtras() {
     setPublishImage(null);
     setPublishImagePreview(null);
+    setGenPrompt("");
+    setGenAssetId(null);
+    setGenBusy(false);
     setScheduleOn(false);
     setScheduleAt("");
   }
@@ -373,10 +380,31 @@ export function Dashboard() {
   }
   function pickImage(file: File | null) {
     setPublishImage(file);
+    if (file) setGenAssetId(null); // anexo e imagem gerada são mutuamente exclusivos
     setPublishImagePreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return file ? URL.createObjectURL(file) : null;
     });
+  }
+  async function generatePublishImage() {
+    setGenBusy(true);
+    setStatus("Gerando imagem com IA — leva alguns segundos...");
+    try {
+      const r = await fetch("/api/media/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ platform: publishPlatform, prompt: genPrompt || undefined, commentary: publishText || undefined }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(friendlyApiError(d, r.status, "Não foi possível gerar a imagem"));
+      pickImage(null);
+      setGenAssetId(d.mediaAssetId as string);
+      setStatus("Imagem gerada — revise a prévia. Você pode gerar outra ou publicar.");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Erro ao gerar a imagem.");
+    } finally {
+      setGenBusy(false);
+    }
   }
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -384,7 +412,7 @@ export function Dashboard() {
       setStatus("Escolha a data e a hora para agendar.");
       return;
     }
-    if (PLATFORM_LIMITS[publishPlatform].imageRequired && !publishImage) {
+    if (PLATFORM_LIMITS[publishPlatform].imageRequired && !publishImage && !genAssetId) {
       setStatus(`O ${PLATFORM_LABEL[publishPlatform]} exige uma imagem na publicação.`);
       return;
     }
@@ -397,6 +425,7 @@ export function Dashboard() {
       body.set("commentary", publishText);
       if (publishArtifactId) body.set("artifactId", publishArtifactId);
       if (publishImage) body.set("image", publishImage);
+      else if (genAssetId) body.set("mediaAssetId", genAssetId);
       if (scheduleOn && scheduleAt) body.set("scheduledFor", new Date(scheduleAt).toISOString());
       const r = await fetch("/api/publications", { method: "POST", body });
       const d = await r.json().catch(() => null);
@@ -552,8 +581,13 @@ export function Dashboard() {
               publish={publish}
               isPublishing={isPublishing}
               connectSocial={connectSocial}
-              imagePreview={publishImagePreview}
+              imagePreview={publishImagePreview ?? (genAssetId ? `/api/media/${genAssetId}` : null)}
+              isGenerated={!publishImage && Boolean(genAssetId)}
               pickImage={pickImage}
+              genPrompt={genPrompt}
+              setGenPrompt={setGenPrompt}
+              genBusy={genBusy}
+              generateImage={generatePublishImage}
               scheduleOn={scheduleOn}
               setScheduleOn={setScheduleOn}
               scheduleAt={scheduleAt}
@@ -636,7 +670,12 @@ function CriarSection(props: {
   isPublishing: boolean;
   connectSocial: (platform: Platform) => void;
   imagePreview: string | null;
+  isGenerated: boolean;
   pickImage: (f: File | null) => void;
+  genPrompt: string;
+  setGenPrompt: (v: string) => void;
+  genBusy: boolean;
+  generateImage: () => void;
   scheduleOn: boolean;
   setScheduleOn: (v: boolean) => void;
   scheduleAt: string;
@@ -740,7 +779,12 @@ function PublishEditor(props: {
   connectSocial: (p: Platform) => void;
   closePublish: () => void;
   imagePreview: string | null;
+  isGenerated: boolean;
   pickImage: (f: File | null) => void;
+  genPrompt: string;
+  setGenPrompt: (v: string) => void;
+  genBusy: boolean;
+  generateImage: () => void;
   scheduleOn: boolean;
   setScheduleOn: (v: boolean) => void;
   scheduleAt: string;
@@ -804,21 +848,52 @@ function PublishEditor(props: {
             {props.publishText.length}/{limits.captionMax} · publica em {conn.displayName ?? "sua conta"}
           </p>
 
-          {/* Imagem */}
+          {/* Imagem: anexada pelo usuário OU gerada por IA (com prévia e aprovação) */}
           <div className="mt-3">
             {props.imagePreview ? (
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={props.imagePreview} alt="Prévia da imagem" className="h-16 w-16 rounded-lg object-cover" />
-                <button type="button" onClick={() => props.pickImage(null)} className="text-sm font-semibold text-[#D6D3C4] underline">
-                  Remover imagem
-                </button>
+                <img src={props.imagePreview} alt="Prévia da imagem" className="h-24 w-24 rounded-lg object-cover" />
+                <div className="flex flex-col items-start gap-1.5">
+                  {props.isGenerated && (
+                    <>
+                      <span className="rounded-full bg-[#F5A623]/15 px-2 py-0.5 text-[11px] font-bold text-[#F5A623]">gerada por IA — revise antes de publicar</span>
+                      <button type="button" onClick={props.generateImage} disabled={props.genBusy} className="text-sm font-semibold text-[#7DC8F5] underline disabled:opacity-60">
+                        {props.genBusy ? "Gerando outra..." : "Gerar outra"}
+                      </button>
+                    </>
+                  )}
+                  <button type="button" onClick={() => props.pickImage(null)} className="text-sm font-semibold text-[#D6D3C4] underline">
+                    Remover imagem
+                  </button>
+                </div>
               </div>
             ) : (
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-[#D6D3C4] hover:border-white/30">
-                + Anexar imagem
-                <input type="file" accept={limits.imageAccept} className="hidden" onChange={(e) => props.pickImage(e.target.files?.[0] ?? null)} />
-              </label>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-[#D6D3C4] hover:border-white/30">
+                    + Anexar imagem
+                    <input type="file" accept={limits.imageAccept} className="hidden" onChange={(e) => props.pickImage(e.target.files?.[0] ?? null)} />
+                  </label>
+                  <span className="text-xs text-[#8FA3B8]">ou</span>
+                  <button
+                    type="button"
+                    onClick={props.generateImage}
+                    disabled={props.genBusy}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#F5A623]/40 px-3 py-2 text-sm font-semibold text-[#F5A623] hover:border-[#F5A623] disabled:opacity-60"
+                  >
+                    {props.genBusy ? "Gerando imagem..." : "✦ Gerar com IA"}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={props.genPrompt}
+                  onChange={(e) => props.setGenPrompt(e.target.value)}
+                  maxLength={800}
+                  placeholder="Descreva a imagem (opcional — sem descrição, uso o texto do post)"
+                  className="w-full rounded-lg border border-white/10 bg-[#0C1A2E] px-3 py-2 text-sm text-[#ECEFF4] outline-none placeholder:text-[#5C7186] focus:border-white/30"
+                />
+              </div>
             )}
             <p className="mt-1.5 text-xs text-[#8FA3B8]">
               {limits.imageRequired ? "Imagem obrigatória · JPEG" : "Imagem opcional · JPG, PNG ou GIF"} · até {limits.maxMb} MB
@@ -847,7 +922,7 @@ function PublishEditor(props: {
             </button>
             <button
               type="submit"
-              disabled={props.isPublishing || !props.publishText.trim() || (limits.imageRequired && !props.imagePreview)}
+              disabled={props.isPublishing || props.genBusy || !props.publishText.trim() || (limits.imageRequired && !props.imagePreview)}
               className="rounded-full px-5 py-2 text-sm font-black text-white disabled:opacity-60"
               style={{ backgroundColor: accent }}
             >

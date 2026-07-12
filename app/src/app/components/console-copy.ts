@@ -23,6 +23,9 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   instagram_requer_imagem: "O Instagram exige uma imagem na publicação.",
   instagram_legenda_longa: "A legenda do Instagram vai até 2200 caracteres.",
   instagram_formato_invalido: "O Instagram aceita imagem só em JPEG.",
+  image_gen_not_configured: "Geração de imagem indisponível nesta instância.",
+  image_gen_failed: "Não foi possível gerar a imagem agora. Tente de novo.",
+  image_gen_sem_descricao: "Escreva o texto do post ou descreva a imagem antes de gerar.",
 };
 
 export const GENERATION_STATUS_LABELS: Record<string, string> = {

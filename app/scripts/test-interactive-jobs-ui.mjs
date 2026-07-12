@@ -26,6 +26,8 @@ const requiredTexts = [
   "/api/jobs",
   "/api/publications",
   "/api/social",
+  "/api/media/generate",
+  "Gerar com IA",
 ];
 
 for (const text of requiredTexts) {

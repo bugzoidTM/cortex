@@ -70,6 +70,10 @@ services:
       INSTAGRAM_CLIENT_ID_FILE: "/run/secrets/cortex_instagram_client_id_v3"
       INSTAGRAM_CLIENT_SECRET_FILE: "/run/secrets/cortex_instagram_client_secret_v3"
       INSTAGRAM_REDIRECT_URI: "https://cortex.nutef.com/api/social/instagram/callback"
+      # Geração de imagem por IA (worker Cloudflare da Nutef, o mesmo do Instagram
+      # do Apostileiros). O bearer é o do worker legado — efetivamente público.
+      CORTEX_IMAGE_WORKER_URL: "https://imagem.contato-66e.workers.dev/v1/images/generations"
+      CORTEX_IMAGE_WORKER_TOKEN: "0001"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
