@@ -42,7 +42,7 @@ services:
       - cortex_linkedin_client_id
       - cortex_linkedin_client_secret
       - cortex_instagram_client_id_v3
-      - cortex_instagram_client_secret_v2
+      - cortex_instagram_client_secret_v3
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
@@ -68,7 +68,7 @@ services:
       LINKEDIN_CLIENT_SECRET_FILE: "/run/secrets/cortex_linkedin_client_secret"
       LINKEDIN_REDIRECT_URI: "https://cortex.nutef.com/api/social/linkedin/callback"
       INSTAGRAM_CLIENT_ID_FILE: "/run/secrets/cortex_instagram_client_id_v3"
-      INSTAGRAM_CLIENT_SECRET_FILE: "/run/secrets/cortex_instagram_client_secret_v2"
+      INSTAGRAM_CLIENT_SECRET_FILE: "/run/secrets/cortex_instagram_client_secret_v3"
       INSTAGRAM_REDIRECT_URI: "https://cortex.nutef.com/api/social/instagram/callback"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -108,7 +108,7 @@ services:
       - cortex_linkedin_client_id
       - cortex_linkedin_client_secret
       - cortex_instagram_client_id_v3
-      - cortex_instagram_client_secret_v2
+      - cortex_instagram_client_secret_v3
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
@@ -132,7 +132,7 @@ services:
       LINKEDIN_CLIENT_SECRET_FILE: "/run/secrets/cortex_linkedin_client_secret"
       LINKEDIN_REDIRECT_URI: "https://cortex.nutef.com/api/social/linkedin/callback"
       INSTAGRAM_CLIENT_ID_FILE: "/run/secrets/cortex_instagram_client_id_v3"
-      INSTAGRAM_CLIENT_SECRET_FILE: "/run/secrets/cortex_instagram_client_secret_v2"
+      INSTAGRAM_CLIENT_SECRET_FILE: "/run/secrets/cortex_instagram_client_secret_v3"
       INSTAGRAM_REDIRECT_URI: "https://cortex.nutef.com/api/social/instagram/callback"
       # Opcional: webhook (Slack/Discord/etc.) para alerta de job falho e erro do worker.
       # CORTEX_ALERT_WEBHOOK_URL: "https://hooks.slack.com/services/XXX"
@@ -210,7 +210,7 @@ secrets:
     external: true
   cortex_instagram_client_id_v3:
     external: true
-  cortex_instagram_client_secret_v2:
+  cortex_instagram_client_secret_v3:
     external: true
 
 volumes:
