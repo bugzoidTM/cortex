@@ -38,6 +38,8 @@ export async function POST(request: Request) {
         120,
       );
       base = scene ?? parsed.commentary;
+      // Observabilidade p/ calibrar o prompt com uso real (a cena não é dado sensível).
+      console.log(JSON.stringify({ event: "image_gen_scene", derived: Boolean(scene), scene: (scene ?? "").slice(0, 200) }));
     }
     if (!base || base.length < 3) {
       return Response.json({ ok: false, error: "image_gen_sem_descricao" }, { status: 400 });
